@@ -269,7 +269,7 @@ test("a 429 then a 200 succeeds on the second attempt, with the same request aft
   const calls = [];
   const answer = await ask(inTurn(calls, refuse(429), fakeJev(() => 0.9)));
   assert.equal(answer.attempts, 2);
-  assert.equal(answer.probabilities.get("payments"), 0.9);
+  assert.equal(answer.probabilities.get(PAYMENTS[0]), 0.9);
   assert.equal(calls.length, 2);
   assert.equal(calls[1].init.body, calls[0].init.body);
   assert.ok(calls[1].at - calls[0].at >= 190, `waited ${calls[1].at - calls[0].at} ms`);

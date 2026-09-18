@@ -16,7 +16,7 @@ const ENTRY = new URL("../plugins/jev-rules/hooks/jev-rules.mjs", import.meta.ur
 function runHook(stdin, cwd, tmp = mkdtempSync(join(tmpdir(), "jev-rules-tmp-"))) {
   const home = mkdtempSync(join(tmpdir(), "jev-rules-home-"));
   const env = { ...process.env, HOME: home, USERPROFILE: home, TMPDIR: tmp, TMP: tmp, TEMP: tmp };
-  for (const key of ["JEV_API_KEY", "TYPESAFE_API_KEY", "AI_GATEWAY_API_KEY", "CLAUDE_PROJECT_DIR", "JEV_DEBUG", "JEV_RULES_EDITS"]) delete env[key];
+  for (const key of ["JEV_API_KEY", "TYPESAFE_API_KEY", "AI_GATEWAY_API_KEY", "CLAUDE_PROJECT_DIR", "JEV_DEBUG", "JEV_RULES_EDITS", "JEV_RULES_MAP"]) delete env[key];
   return spawnSync(process.execPath, [ENTRY], { input: stdin, cwd, env, encoding: "utf8", timeout: 15000 });
 }
 
@@ -38,6 +38,27 @@ test("with no key the hook prints a valid envelope with every rule, exits 0 and 
   assert.equal(out.hookSpecificOutput.hookEventName, "UserPromptSubmit");
   assert.match(out.hookSpecificOutput.additionalContext, /## a\nA body/);
   assert.match(out.hookSpecificOutput.additionalContext, /## b\nB body/);
+});
+
+test("a project with only a codebase-mapper map and no key gets a pointer to each document, exits 0 and says nothing on stderr", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "jev-rules-project-"));
+  const info = join(cwd, ".claude", ".codebase-info");
+  mkdirSync(info, { recursive: true });
+  writeFileSync(join(info, "INDEX.md"), "# Map\n\n- [Architecture](architecture.md)\n");
+  writeFileSync(join(info, "architecture.md"), "# Architecture\n\nLast Updated: 2026-09-13\n\nA plugin marketplace.\n");
+  const res = runHook(JSON.stringify({ hook_event_name: "UserPromptSubmit", session_id: "t", cwd, prompt: "hello" }), cwd);
+  assert.equal(res.status, 0);
+  assert.equal(res.stderr, "");
+  assert.equal(
+    JSON.parse(res.stdout).hookSpecificOutput.additionalContext,
+    [
+      "Codebase map documents relevant to this request (jev-rules, 1 of 1):",
+      "(Jev was unavailable: no-key. Documents are listed, not included.)",
+      "",
+      "Not judged; read these files if needed:",
+      "- .claude/.codebase-info/architecture.md: Architecture: A plugin marketplace.",
+    ].join("\n"),
+  );
 });
 
 test("with no rules directory the hook prints nothing and exits 0", () => {

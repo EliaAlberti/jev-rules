@@ -6,7 +6,8 @@
 // when the file is outside the project: never its contents, never the edit.
 // Answers are cached per file for the session, so a second edit to the same
 // file costs no call. When Jev cannot answer, the rules it was asked about
-// are injected, and that counts for the rest of the turn.
+// are injected, and that counts for the rest of the turn. Codebase map
+// documents are not asked about here: the prompt that started the turn was.
 
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
@@ -62,8 +63,13 @@ export async function decideEdit({ candidates, file, cache, config, fetch: fetch
     if (p === undefined) unknown.push(rule);
     else cached.push({ rule, p, injected: p >= config.threshold, why: "cached" });
   }
-  const { entries, ...verdict } = await judge({ rules: unknown, state: { file }, instruction: fileInstructionFor, config, fetch: fetchImpl });
-  const all = [...cached, ...entries];
+  const { entries, ...verdict } = await judge({
+    groups: [{ prefix: "r", instruction: fileInstructionFor, items: unknown }],
+    state: { file },
+    config,
+    fetch: fetchImpl,
+  });
+  const all = [...cached, ...entries[0]];
   return { ...verdict, truncated: false, all, selected: all.filter((e) => e.injected) };
 }
 

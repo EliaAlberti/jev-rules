@@ -1,5 +1,5 @@
 // One Jev call: a small state (the prompt, or the path of a file about to
-// change) and one yes/no question per rule.
+// change) and one yes/no question per rule or map document.
 //
 // Two routes reach the same model. TypeSafe's own endpoint is the documented
 // default (docs.typesafe.ai/api). Vercel AI Gateway also serves Jev; its wire
@@ -32,6 +32,11 @@ export function instructionFor(description) {
  */
 export function fileInstructionFor(description) {
   return "Judging by its path, a change to the file `file` is about: " + description;
+}
+
+/** The question Jev answers for each codebase map document, given the prompt as `request`. */
+export function mapInstructionFor(description) {
+  return "Reading a document about the following would help with the user's `request`: " + description;
 }
 
 /** What a yes and a no mean for this rule, from its `applies` and `does_not_apply`; undefined when it has neither. */
@@ -111,23 +116,30 @@ function retryWait(response) {
  *
  * `state` is everything Jev reads besides the questions, such as
  * `{ request: prompt }`, and `instruction(description)` words each question
- * to match it. Rule names never leave the machine: questions are keyed r0,
- * r1, ... and mapped back here. `timeoutMs` is the budget for the whole call.
- * After a 429 or 529 the same request goes once more, after a short wait, if
- * enough of the budget is left. Throws an Error with a `.reason` of
+ * to match it. `groups` puts different kinds of question in one request:
+ * each group `{ prefix, instruction, items }` words its own, and
+ * `instruction` with `rules` is one group with the prefix `r`. Names never
+ * leave the machine: questions are keyed `<prefix>0`, `<prefix>1`, ... by
+ * position, and answers come back keyed by the objects asked about, so equal
+ * names in two groups cannot clash. `timeoutMs` is the budget for the whole
+ * call. After a 429 or 529 the same request goes once more, after a short
+ * wait, if enough of the budget is left. Throws an Error with a `.reason` of
  * `timeout`, `http-<status>`, `network` or `parse`, and the number of
  * `.attempts` made; the caller fails open on any of them.
  *
  * @param {object} options
  * @param {object} options.state
- * @param {(description: string) => string} options.instruction
- * @param {Array<{name: string, description: string, applies?: string, does_not_apply?: string}>} options.rules
- * @returns {Promise<{probabilities: Map<string, number>, model: string, ms: number, attempts: number}>}
+ * @param {(description: string) => string} [options.instruction]
+ * @param {Array<{description: string, applies?: string, does_not_apply?: string}>} [options.rules]
+ * @param {Array<{prefix: string, instruction: (description: string) => string, items: Array<{description: string, applies?: string, does_not_apply?: string}>}>} [options.groups]
+ * @returns {Promise<{probabilities: Map<object, number>, model: string, ms: number, attempts: number}>}
  */
-export async function askJev({ backend, key, state, instruction, rules, timeoutMs, fetch: fetchImpl = globalThis.fetch }) {
+export async function askJev({ backend, key, state, instruction, rules, groups = [{ prefix: "r", instruction, items: rules }], timeoutMs, fetch: fetchImpl = globalThis.fetch }) {
   const wire = BACKENDS[backend];
   if (!wire) throw reasoned("config", `unknown backend ${backend}`, 0);
-  const questions = rules.map((rule, i) => ({ id: `r${i}`, instructions: instruction(rule.description), criteria: criteriaFor(rule) }));
+  const questions = groups.flatMap(({ prefix, instruction: words, items }) =>
+    items.map((item, i) => ({ item, id: `${prefix}${i}`, instructions: words(item.description), criteria: criteriaFor(item) })),
+  );
 
   // One deadline covers both attempts and the wait, so a retry can never
   // push the hook past its own time limit.
@@ -172,9 +184,9 @@ export async function askJev({ backend, key, state, instruction, rules, timeoutM
   }
   const { model, probabilities } = wire.decode(json);
   if (!probabilities) throw reasoned("parse", "response has no answers", attempts);
-  const byName = new Map();
-  rules.forEach((rule, i) => {
-    if (probabilities[`r${i}`] !== undefined) byName.set(rule.name, probabilities[`r${i}`]);
-  });
-  return { probabilities: byName, model, ms, attempts };
+  const byItem = new Map();
+  for (const { item, id } of questions) {
+    if (probabilities[id] !== undefined) byItem.set(item, probabilities[id]);
+  }
+  return { probabilities: byItem, model, ms, attempts };
 }
