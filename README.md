@@ -2,7 +2,7 @@
 
 <p>
   <img src="https://img.shields.io/badge/Claude%20Code-Plugin-5A67D8?style=for-the-badge" alt="Claude Code plugin" />
-  <img src="https://img.shields.io/badge/Version-0.2.0-3178C6?style=for-the-badge" alt="Version 0.2.0" />
+  <img src="https://img.shields.io/badge/Version-0.3.0-3178C6?style=for-the-badge" alt="Version 0.3.0" />
   <img src="https://img.shields.io/badge/Dependencies-None-1C7C54?style=for-the-badge" alt="No dependencies" />
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="MIT License" />
 </p>
@@ -16,7 +16,7 @@
 
 If you use Claude Code for a while, you end up with a pile of standing instructions: test the payment code, use British spelling, follow the deploy checklist. Show all of them on every prompt and Claude wades through rules that have nothing to do with the request; pick them by keyword and a rule is missed the moment the request does not contain its trigger word. jev-rules asks a small, fast decision model called Jev one yes/no question per rule, "is this request about that?", and passes Claude only the rules that get a yes. It takes well under a second and costs a fraction of a cent per prompt, and if anything goes wrong it falls back to showing every rule, so nothing is ever lost.
 
-**New in 0.2.0:** rules that follow the file Claude is about to change, a codebase map filtered the same way as rules, rule subfolders, sharper rules with `applies` and `does_not_apply`, and one quiet retry when the API is busy. See the [changelog](CHANGELOG.md).
+**New in 0.3.0:** each rule and map document is delivered once per session instead of on every matching prompt, so a long session never costs more than loading everything once, and usually far less. 0.2.0 added rules that follow the file Claude is changing, a filtered codebase map, rule subfolders, `applies` and `does_not_apply`, and a retry when the API is busy. See the [changelog](CHANGELOG.md).
 
 ---
 
@@ -145,7 +145,7 @@ If you use Eigenwise's [codebase-mapper](https://github.com/Eigenwise/eigenwise-
 
 - **Threshold.** Default 0.6. Set `JEV_RULES_THRESHOLD` to any value from 0 to 1. In practice Jev's answers sit close to 0 or close to 1, so the exact value rarely matters.
 - **`always: true`** rules never go to Jev. They are injected first, on every prompt.
-- **No repeats.** A rule given with the prompt, or with an earlier edit, is not given again in the same turn. A new prompt starts a new turn.
+- **Once per session.** A rule or map document that Claude has been given is not given again in that session, by a prompt or by an edit, and Jev is no longer asked about it. Edit the rule's text and it becomes deliverable again. After `/clear` or a compaction the context is new, so everything is deliverable again. `always: true` rules follow the same pattern: once per session. Set `JEV_RULES_REPEAT=1` to get the old behaviour, delivery on every matching prompt.
 - **Cached per file.** Jev's answers are kept per file for the session, so a second edit to the same file costs no call. Editing a rule's description makes Jev judge it again.
 - **Rules before map.** Claude Code caps hook output at 10,000 characters. Rules take what they need; picked map documents share the rest, most likely first. A picked document that does not fit is listed as its path and description, for Claude to open if needed.
 - **Fail open.** No key, a timeout (default 2 seconds for the whole call, `JEV_RULES_TIMEOUT_MS`), a network error, an HTTP error or an unreadable reply all lead to the same thing: every rule is injected, with a one-line note saying why, and your prompt goes through. Map documents are listed, never poured in. On an edit, the rules Jev could not judge are injected once, and not again that turn. The plugin never blocks a prompt or an edit and never prints to your terminal.
@@ -171,6 +171,7 @@ Settings go in the environment, in `.env` in the project, or in `~/.jev-rules.en
 | `JEV_RULES_TIMEOUT_MS` | `2000` | Budget for the whole Jev call, 100 to 8000. |
 | `JEV_RULES_EDITS` | on | `0` turns off the check before file changes. |
 | `JEV_RULES_MAP` | on | `0` turns off the codebase map. |
+| `JEV_RULES_REPEAT` | off | `1` delivers on every matching prompt instead of once per session. |
 | `JEV_DEBUG` | off | `1` writes decisions to `~/.jev-rules.log`. |
 
 ---
@@ -180,6 +181,15 @@ Settings go in the environment, in `.env` in the project, or in `~/.jev-rules.en
 One Jev call per prompt, whatever the number of rules and map documents: every question is answered in the same request. A file change adds at most one more call, only for a file not yet judged this session.
 
 TypeSafe's published price is $0.042 per million input tokens, with output tokens free ([docs.typesafe.ai/models](https://docs.typesafe.ai/models)). A prompt of a few hundred words plus three rules is about 500 tokens, so roughly $0.00002 per prompt, or a cent for every five hundred prompts. Each map document adds about 20 tokens plus its description.
+
+**Context tokens.** Measured on the demo project in [`social/demo/shop`](social/demo/shop) (12 rules, 3 map documents, real Jev calls):
+
+| Session | Loading everything up front | jev-rules 0.3.0 | 0.2.0 behaviour (`JEV_RULES_REPEAT=1`) |
+| --- | --- | --- | --- |
+| 8 prompts, all about checkout | about 1,390 tokens | about 330 tokens | about 2,510 tokens |
+| 12 prompts touching nearly every topic | about 1,390 tokens | about 1,400 tokens | about 3,000 tokens |
+
+So the saving depends on how much of your rule set a session touches: a focused session uses a quarter of the tokens, a session that touches everything breaks even, and it never grows with the length of the session. The more rules a project has, the larger the gap. Jev is also asked about fewer rules as the session goes on, and not at all once everything relevant has been delivered.
 
 Latency measured while building this: 260 to 520 ms per call, with the first call of a session slower because of the TLS handshake. That matches what [jev-router](https://github.com/gargpratyush/jev-router) reports for the same API. `npm run live` prints the numbers for your own connection.
 
@@ -194,7 +204,7 @@ What leaves your machine goes to TypeSafe, or to Vercel's gateway if that is the
 
 Rule bodies, document bodies, rule and document names, file contents, the edit itself and everything else stay local. TypeSafe states it does not train on requests ([models page](https://docs.typesafe.ai/models#data-handling)).
 
-The debug log is off by default, lives on your machine, and records the first 80 characters of each prompt and the path of each file judged. Session state (the rules given this turn and Jev's answers per file) is one small file per session in your system temp directory, under `jev-rules/`, readable only by you and removed after a week.
+The debug log is off by default, lives on your machine, and records the first 80 characters of each prompt and the path of each file judged. Session state (what has been delivered this session and Jev's answers per file) is one small file per session in your system temp directory, under `jev-rules/`, readable only by you and removed after a week.
 
 ---
 
@@ -212,7 +222,7 @@ The debug log is off by default, lives on your machine, and records the first 80
 ## Development
 
 ```bash
-npm test                    # offline, mocked Jev: prompts, file changes, map, fail-open, retry, both wire formats
+npm test                    # offline, mocked Jev: prompts, file changes, map, once-per-session, fail-open, retry, both wire formats
 npm run live                # real API: example rules and map against sample prompts and file paths
 npm run live -- --files src/app.ts docs/guide.md
 npm run live -- --map
