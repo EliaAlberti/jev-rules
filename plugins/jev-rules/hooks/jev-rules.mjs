@@ -1,15 +1,23 @@
 #!/usr/bin/env node
-// UserPromptSubmit hook. Reads the hook JSON from stdin, asks Jev which rules
-// apply, prints the additionalContext envelope. Exit code is always 0 and
-// stderr stays silent: a broken hook must never block or clutter a prompt.
+// Entry point for both hooks. Reads the hook JSON from stdin, hands it to the
+// prompt hook (UserPromptSubmit) or the edit hook (PreToolUse), and prints the
+// additionalContext envelope. Exit code is always 0, stderr stays silent and
+// no permission decision is ever returned: a broken hook must never block or
+// clutter a prompt or an edit.
 
 import { readFileSync } from "node:fs";
+import { runEdit } from "./lib/edit.mjs";
 import { run } from "./lib/run.mjs";
 
 process.exitCode = 0;
 const quiet = () => {};
 process.on("uncaughtException", quiet);
 process.on("unhandledRejection", quiet);
+
+const HOOKS = new Map([
+  ["UserPromptSubmit", run],
+  ["PreToolUse", runEdit],
+]);
 
 let input = {};
 try {
@@ -20,12 +28,14 @@ try {
 }
 
 try {
-  const context = await run(input);
+  // Claude Code always names the event. A payload without a name is taken as
+  // a prompt, the only event this script handled before edits.
+  const event = input?.hook_event_name ?? "UserPromptSubmit";
+  const hook = HOOKS.get(event);
+  const context = hook ? await hook(input) : null;
   if (context) {
-    process.stdout.write(
-      JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: context } }),
-    );
+    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: context } }));
   }
 } catch {
-  // Fail open: nothing to add, the prompt proceeds.
+  // Fail open: nothing to add, the prompt or edit proceeds.
 }

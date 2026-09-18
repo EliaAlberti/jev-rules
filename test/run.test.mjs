@@ -1,51 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { readConfig, resolveEnv } from "../plugins/jev-rules/hooks/lib/config.mjs";
-import { askJev, BACKENDS, MAX_PROMPT_CHARS } from "../plugins/jev-rules/hooks/lib/jev.mjs";
+import { askJev, BACKENDS, instructionFor, MAX_PROMPT_CHARS } from "../plugins/jev-rules/hooks/lib/jev.mjs";
 import { OUTPUT_BUDGET, run } from "../plugins/jev-rules/hooks/lib/run.mjs";
+import { fakeJev, home, names, project, THREE, TYPESAFE_ENV, VERCEL_ENV } from "./helpers.mjs";
 
 // --- helpers ---------------------------------------------------------------
-
-/** A project whose rules are `{ name: { body, ...frontmatter } }`; a name may contain `/`. */
-function project(rules) {
-  const dir = mkdtempSync(join(tmpdir(), "jev-rules-project-"));
-  const rulesDir = join(dir, ".claude", "jev-rules");
-  mkdirSync(rulesDir, { recursive: true });
-  for (const [name, { body, ...fields }] of Object.entries(rules)) {
-    const header = Object.entries(fields).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`);
-    const file = join(rulesDir, `${name}.md`);
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, ["---", ...header, "---", body ?? `${name} body`, ""].join("\n"));
-  }
-  return dir;
-}
-
-function home() {
-  return mkdtempSync(join(tmpdir(), "jev-rules-home-"));
-}
-
-const TYPESAFE_ENV = { JEV_API_KEY: "ts-test-key" };
-const VERCEL_ENV = { AI_GATEWAY_API_KEY: "vck_test" };
-
-/** A fake Jev that scores each question by a function of its instructions text. */
-function fakeJev(score, { backend = "typesafe", calls = [] } = {}) {
-  return async (url, init) => {
-    const body = JSON.parse(init.body);
-    calls.push({ url, init, body });
-    const answers = {};
-    for (const [id, q] of Object.entries(body.questions)) {
-      const p = score(q.instructions);
-      if (p === null) continue; // simulate a missing answer
-      answers[id] = backend === "vercel" ? { type: "boolean", probability: p } : { type: "noul", noul: p };
-    }
-    const payload = backend === "vercel" ? { answers, usage: {} } : { model: "jev-1.13.0", answers, usage: {} };
-    return new Response(JSON.stringify(payload), { status: 200 });
-  };
-}
 
 /** A fetch that never answers and gives up only when its request is aborted. */
 const hang = (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason)));
@@ -65,14 +29,6 @@ const refuse = (status, headers = {}) => async () => new Response("try again lat
 const after = (ms, handler) => async (url, init) => {
   await sleep(ms);
   return handler(url, init);
-};
-
-const names = (context) => [...context.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
-
-const THREE = {
-  payments: { description: "Changing payment or checkout code." },
-  deploy: { description: "Deploying or releasing." },
-  spelling: { description: "Writing prose people read." },
 };
 
 // --- threshold -------------------------------------------------------------
@@ -259,7 +215,9 @@ test("a JEV_API_KEY that starts with vck_ is routed to the gateway", () => {
 
 test("config defaults, clamps and env-file precedence", () => {
   const c = readConfig({});
-  assert.deepEqual([c.threshold, c.timeoutMs, c.debug], [0.6, 2000, false]);
+  assert.deepEqual([c.threshold, c.timeoutMs, c.debug, c.edits], [0.6, 2000, false, true]);
+  for (const off of ["0", "false", "No"]) assert.equal(readConfig({ JEV_RULES_EDITS: off }).edits, false, off);
+  assert.equal(readConfig({ JEV_RULES_EDITS: "1" }).edits, true);
   assert.equal(readConfig({ JEV_RULES_THRESHOLD: "abc" }).threshold, 0.6);
   assert.equal(readConfig({ JEV_RULES_THRESHOLD: "1.5" }).threshold, 1);
   assert.equal(readConfig({ JEV_RULES_TIMEOUT_MS: "99999" }).timeoutMs, 8000);
@@ -286,10 +244,11 @@ test("long prompts are cut before they reach Jev, and the debug log records ever
   const calls = [];
   const long = "y".repeat(MAX_PROMPT_CHARS + 500);
   const score = (q) => (q.includes("payment") ? 0.9 : 0.2);
-  await run({ prompt: long, cwd, session_id: "s1" }, { env: { ...TYPESAFE_ENV, JEV_DEBUG: "1" }, home: h, fetch: fakeJev(score, { calls }) });
+  const stateDir = mkdtempSync(join(tmpdir(), "jev-rules-state-"));
+  await run({ prompt: long, cwd, session_id: "s1" }, { env: { ...TYPESAFE_ENV, JEV_DEBUG: "1" }, home: h, stateDir, fetch: fakeJev(score, { calls }) });
   assert.equal(calls[0].body.state.request.length, MAX_PROMPT_CHARS);
   const log = readFileSync(join(h, ".jev-rules.log"), "utf8");
-  assert.match(log, /session=s1 backend=typesafe model=jev-1\.13\.0 ms=\d+ attempts=1 outcome=jev truncated=yes prompt="y{80}"/);
+  assert.match(log, /session=s1 event=prompt backend=typesafe model=jev-1\.13\.0 ms=\d+ attempts=1 outcome=jev truncated=yes prompt="y{80}"/);
   assert.match(log, /^  payments p=0\.90 injected=yes$/m);
   assert.match(log, /^  deploy p=0\.20 injected=no$/m);
 });
@@ -303,7 +262,8 @@ test("no debug log is written unless JEV_DEBUG is set", async () => {
 // --- retry on rate limits --------------------------------------------------
 
 const PAYMENTS = [{ name: "payments", description: "Changing payment or checkout code." }];
-const ask = (fetch, timeoutMs = 2000) => askJev({ backend: "typesafe", key: "k", prompt: "x", rules: PAYMENTS, timeoutMs, fetch });
+const ask = (fetch, timeoutMs = 2000) =>
+  askJev({ backend: "typesafe", key: "k", state: { request: "x" }, instruction: instructionFor, rules: PAYMENTS, timeoutMs, fetch });
 
 test("a 429 then a 200 succeeds on the second attempt, with the same request after the default 200 ms wait", async () => {
   const calls = [];

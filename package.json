@@ -1,11 +1,11 @@
 {
   "name": "jev-rules",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Jev picks which of your rules apply to each prompt, so Claude only sees the ones that matter.",
   "type": "module",
   "scripts": {
-    "test": "node --test test/rules.test.mjs test/run.test.mjs test/hook.test.mjs",
+    "test": "node --test test/rules.test.mjs test/run.test.mjs test/edit.test.mjs test/hook.test.mjs",
     "live": "node scripts/live.mjs"
   },
   "engines": {

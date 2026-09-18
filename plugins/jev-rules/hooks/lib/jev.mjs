@@ -1,4 +1,5 @@
-// One Jev call: the prompt as state, one yes/no question per rule.
+// One Jev call: a small state (the prompt, or the path of a file about to
+// change) and one yes/no question per rule.
 //
 // Two routes reach the same model. TypeSafe's own endpoint is the documented
 // default (docs.typesafe.ai/api). Vercel AI Gateway also serves Jev; its wire
@@ -8,6 +9,7 @@
 
 import { setTimeout as sleep } from "node:timers/promises";
 
+// The most of a prompt that Jev is sent; the prompt hook cuts it to this.
 export const MAX_PROMPT_CHARS = 24000;
 
 // TypeSafe asks clients to retry a 429 (rate limited) or 529 (overloaded)
@@ -18,9 +20,18 @@ const RETRY_DEFAULT_WAIT_MS = 200;
 const RETRY_MAX_WAIT_MS = 300;
 const RETRY_MIN_LEFT_MS = 400;
 
-/** The question Jev answers for each rule. */
+/** The question Jev answers for each rule, given the prompt as `request`. */
 export function instructionFor(description) {
   return "The user's `request` is about: " + description;
+}
+
+/**
+ * The question Jev answers for each rule, given the path of the file about to
+ * change as `file`. Jev only ever sees the path, and saying so separated the
+ * rules far more cleanly in live runs than the same question without it.
+ */
+export function fileInstructionFor(description) {
+  return "Judging by its path, a change to the file `file` is about: " + description;
 }
 
 /** What a yes and a no mean for this rule, from its `applies` and `does_not_apply`; undefined when it has neither. */
@@ -96,25 +107,27 @@ function retryWait(response) {
 }
 
 /**
- * Asks Jev, in one request, whether each rule applies to the prompt.
+ * Asks Jev, in one request, whether each rule applies to `state`.
  *
- * Rule names never leave the machine: questions are keyed r0, r1, ... and
- * mapped back here. `timeoutMs` is the budget for the whole call. After a 429
- * or 529 the same request goes once more, after a short wait, if enough of the
- * budget is left. Throws an Error with a `.reason` of `timeout`,
- * `http-<status>`, `network` or `parse`, and the number of `.attempts` made;
- * the caller fails open on any of them.
+ * `state` is everything Jev reads besides the questions, such as
+ * `{ request: prompt }`, and `instruction(description)` words each question
+ * to match it. Rule names never leave the machine: questions are keyed r0,
+ * r1, ... and mapped back here. `timeoutMs` is the budget for the whole call.
+ * After a 429 or 529 the same request goes once more, after a short wait, if
+ * enough of the budget is left. Throws an Error with a `.reason` of
+ * `timeout`, `http-<status>`, `network` or `parse`, and the number of
+ * `.attempts` made; the caller fails open on any of them.
  *
  * @param {object} options
+ * @param {object} options.state
+ * @param {(description: string) => string} options.instruction
  * @param {Array<{name: string, description: string, applies?: string, does_not_apply?: string}>} options.rules
- * @returns {Promise<{probabilities: Map<string, number>, model: string, ms: number, attempts: number, truncated: boolean}>}
+ * @returns {Promise<{probabilities: Map<string, number>, model: string, ms: number, attempts: number}>}
  */
-export async function askJev({ backend, key, prompt, rules, timeoutMs, fetch: fetchImpl = globalThis.fetch }) {
+export async function askJev({ backend, key, state, instruction, rules, timeoutMs, fetch: fetchImpl = globalThis.fetch }) {
   const wire = BACKENDS[backend];
   if (!wire) throw reasoned("config", `unknown backend ${backend}`, 0);
-  const truncated = prompt.length > MAX_PROMPT_CHARS;
-  const state = { request: truncated ? prompt.slice(0, MAX_PROMPT_CHARS) : prompt };
-  const questions = rules.map((rule, i) => ({ id: `r${i}`, instructions: instructionFor(rule.description), criteria: criteriaFor(rule) }));
+  const questions = rules.map((rule, i) => ({ id: `r${i}`, instructions: instruction(rule.description), criteria: criteriaFor(rule) }));
 
   // One deadline covers both attempts and the wait, so a retry can never
   // push the hook past its own time limit.
@@ -163,5 +176,5 @@ export async function askJev({ backend, key, prompt, rules, timeoutMs, fetch: fe
   rules.forEach((rule, i) => {
     if (probabilities[`r${i}`] !== undefined) byName.set(rule.name, probabilities[`r${i}`]);
   });
-  return { probabilities: byName, model, ms, attempts, truncated };
+  return { probabilities: byName, model, ms, attempts };
 }

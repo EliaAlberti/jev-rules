@@ -1,8 +1,20 @@
 {
-  "description": "jev-rules: ask Jev which project rules apply to this prompt and inject only those",
+  "description": "jev-rules: ask Jev which project rules apply to each prompt and to each file Claude is about to change, and inject only those",
   "hooks": {
     "UserPromptSubmit": [
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/jev-rules.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",

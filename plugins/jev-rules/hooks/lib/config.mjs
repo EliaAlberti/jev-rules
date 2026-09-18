@@ -37,8 +37,10 @@ function number(value, fallback, { min, max }) {
   return Math.min(max, Math.max(min, n));
 }
 
+const OFF = /^(0|false|no)$/i;
+
 /**
- * @returns {{backend: "typesafe"|"vercel"|null, key: string|null, threshold: number, timeoutMs: number, debug: boolean}}
+ * @returns {{backend: "typesafe"|"vercel"|null, key: string|null, threshold: number, timeoutMs: number, debug: boolean, edits: boolean}}
  */
 export function readConfig(env) {
   const direct = env.JEV_API_KEY || env.TYPESAFE_API_KEY || "";
@@ -57,6 +59,7 @@ export function readConfig(env) {
     key,
     threshold: number(env.JEV_RULES_THRESHOLD, DEFAULT_THRESHOLD, { min: 0, max: 1 }),
     timeoutMs: Math.round(number(env.JEV_RULES_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, { min: MIN_TIMEOUT_MS, max: MAX_TIMEOUT_MS })),
-    debug: Boolean(env.JEV_DEBUG) && !/^(0|false|no)$/i.test(env.JEV_DEBUG),
+    debug: Boolean(env.JEV_DEBUG) && !OFF.test(env.JEV_DEBUG),
+    edits: !OFF.test(env.JEV_RULES_EDITS ?? ""),
   };
 }
