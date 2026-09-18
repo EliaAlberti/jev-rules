@@ -7,9 +7,29 @@
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="MIT License" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/EliaAlberti/jev-rules/releases/download/v0.2.0/jev-rules-rule-follows-the-file.mp4">
+    <img src="social/jev-rules-demo.gif" alt="A vague prompt gets no rules. Then Claude edits a checkout file and the payments rule arrives, scored 0.97." width="800" />
+  </a><br />
+  <em>A real Claude Code session, 40 seconds. Click for the full-quality video.</em>
+</p>
+
 If you use Claude Code for a while, you end up with a pile of standing instructions: test the payment code, use British spelling, follow the deploy checklist. Show all of them on every prompt and Claude wades through rules that have nothing to do with the request; pick them by keyword and a rule is missed the moment the request does not contain its trigger word. jev-rules asks a small, fast decision model called Jev one yes/no question per rule, "is this request about that?", and passes Claude only the rules that get a yes. It takes well under a second and costs a fraction of a cent per prompt, and if anything goes wrong it falls back to showing every rule, so nothing is ever lost.
 
 **New in 0.2.0:** rules that follow the file Claude is about to change, a codebase map filtered the same way as rules, rule subfolders, sharper rules with `applies` and `does_not_apply`, and one quiet retry when the API is busy. See the [changelog](CHANGELOG.md).
+
+---
+
+## See it work
+
+Twelve rules in the project, one request, one rule delivered. These are stills from real Claude Code sessions in the demo project under [`social/demo/shop`](social/demo/shop).
+
+| The right rule, not all twelve | Tests first, because the rule says so | "Ship it" brings the checklist |
+| --- | --- | --- |
+| [![Claude lists the one rule it was given, marked 1 of 12](social/stills/after-4-answer.png)](social/stills/after-4-answer.png) | [![Claude writes the tests first, then the one-line fix](social/stills/checkout-4-answer.png)](social/stills/checkout-4-answer.png) | [![The deploy checklist scores 0.98 and the pipeline map document 0.90](social/stills/ship-4-answer.png)](social/stills/ship-4-answer.png) |
+| A checkout bug report: the payments rule (0.90) and the checkout map document (0.85) arrive. The other eleven rules stay out. | Claude writes the tests before the fix, because the payments rule told it to. Each file it touches is judged as it goes. | "Tag v1.4.0 and ship it": the deploy checklist (0.98) and the pipeline document (0.90). No payments rule, no style guide. |
+
+The left side of each picture is Claude Code. The right side is a companion viewer used for these captures ([`social/rig/watch.mjs`](social/rig/watch.mjs)): it tails the real `~/.jev-rules.log` that `JEV_DEBUG=1` writes and draws one bar per rule. The plugin itself stays silent in your session; more captures and the shot list are in [`social/`](social).
 
 ---
 

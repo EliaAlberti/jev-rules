@@ -3,7 +3,8 @@
 Real captures of jev-rules working inside Claude Code, for the README and for social posts. Nothing here is staged: each still comes from a live Claude Code session (v2.1.276, Opus 5) in the demo project under `demo/shop`, and the right-hand pane is a live view of the real `~/.jev-rules.log`.
 
 - `stills/`: key stills at 1920 x 1080, exact 16:9, title bar cropped. Committed. Full-size originals stay local in `stills/full/`.
-- `video/`: raw clips for editing in OpenMontage. Local only (git-ignored).
+- `jev-rules-demo.gif`: the 40-second edited demo as a GIF, used at the top of the main README. The full-quality MP4 is attached to the [v0.2.0 release](https://github.com/EliaAlberti/jev-rules/releases/tag/v0.2.0).
+- `video/`: raw and edited clips. Local only (git-ignored). The edit was made with OpenMontage (Remotion, hand-authored composition).
 - `demo/shop/`: the demo project: twelve popular rules, three map documents, and a small checkout module with a genuine discount bug.
 - `rig/`: the scripts that produced the captures.
 
