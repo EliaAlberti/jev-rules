@@ -6,9 +6,9 @@ All notable changes to jev-rules. The format follows [Keep a Changelog](https://
 
 ### Changed
 
-- **Once-per-session delivery is the default.** A rule or map document Claude has already been given is not delivered again in that session, by a prompt or by an edit, and Jev is no longer asked about it. 0.2.0 delivered on every matching prompt, and those tokens accumulated: on the demo project an 8-prompt checkout session injected about 2,510 tokens; it now injects about 330, against about 1,390 for loading all rules and documents up front. `always: true` rules are also delivered once per session.
+- **Once-per-session delivery is the default.** A rule or map document Claude has already been given is not delivered again in that session, by a prompt or by an edit, and Jev is no longer asked about it. On the demo project an 8-prompt checkout session injects about 330 tokens of rules and documents, against about 1,390 for loading all of them up front. `always: true` rules are also delivered once per session.
 - Editing a rule's text makes it deliverable again. After `/clear` or a compaction everything is deliverable again, through a new SessionStart hook that only runs for those two events.
-- A fail-open now costs one full delivery per session instead of one per prompt.
+- A fail-open costs at most one full delivery per session.
 - The prompt hook keeps its small session state file even when `JEV_RULES_EDITS=0`.
 
 ### Added
