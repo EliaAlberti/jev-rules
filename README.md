@@ -230,6 +230,8 @@ The hook is `plugins/jev-rules/hooks/jev-rules.mjs`; everything it needs is unde
 - [jev-router](https://github.com/gargpratyush/jev-router) by Pratyush Garg, for the pattern of calling Jev from inside Claude Code, the env-file loading and the fail-open discipline.
 - [TypeSafe](https://typesafe.ai) for Jev.
 
+**Questions, ideas, misfires:** join the [Discussions](https://github.com/EliaAlberti/jev-rules/discussions). Bugs go in [Issues](https://github.com/EliaAlberti/jev-rules/issues).
+
 Created by [Elia Alberti](https://github.com/EliaAlberti). Built with and for [Claude Code](https://code.claude.com/docs).
 
 ---
