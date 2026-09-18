@@ -221,16 +221,17 @@ export async function run(input, deps = {}) {
   let shown = [];
   if (rules.length) {
     const rendered = render(decision, rules.length);
-    sections.push(rendered.text);
     shown = rendered.shown;
+    // Nothing applies: say nothing, rather than an empty heading on every prompt.
+    if (shown.length) sections.push(rendered.text);
   }
   let placed = new Map();
   if (docs.length) {
     // Rules come first; the map gets the room they leave, less the blank line between.
     const room = OUTPUT_BUDGET - (sections.length ? sections[0].length + 2 : 0);
     const map = renderMap(decision, docs.length, room);
-    if (map.text) sections.push(map.text);
     placed = map.placed;
+    if (map.text && placed.size) sections.push(map.text);
   }
   if (config.edits && rules.length) {
     // A prompt starts a new turn: the rules it shows replace the last turn's

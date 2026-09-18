@@ -48,7 +48,8 @@ test("JEV_RULES_THRESHOLD changes the cut", async () => {
   const context = await run({ prompt: "x", cwd }, { env: { ...TYPESAFE_ENV, JEV_RULES_THRESHOLD: "0.25" }, home: home(), fetch: fakeJev(score) });
   assert.deepEqual(names(context), ["payments", "deploy", "spelling"]);
   const strict = await run({ prompt: "x", cwd }, { env: { ...TYPESAFE_ENV, JEV_RULES_THRESHOLD: "0.9" }, home: home(), fetch: fakeJev(score) });
-  assert.equal(strict, "Project rules that apply to this request (jev-rules, 0 of 3):");
+  // Nothing applies, so nothing is said: no empty heading on every prompt.
+  assert.equal(strict, null);
 });
 
 test("selected judged rules are ordered by probability, after fixed rules", async () => {

@@ -201,7 +201,8 @@ test("documents at or above the threshold go in, most likely first; always means
   const strict = await prompt(cwd, { env: { ...TYPESAFE_ENV, JEV_RULES_THRESHOLD: "0.9" }, fetch: fakeJev(score) });
   assert.deepEqual(names(strict), ["payments", "b"]);
   const none = await prompt(cwd, { env: TYPESAFE_ENV, fetch: fakeJev(() => 0.02) });
-  assert.equal(mapSection(none), "Codebase map documents relevant to this request (jev-rules, 0 of 4):");
+  // No document helps, so there is no map section at all.
+  assert.equal(mapSection(none ?? ""), "");
 });
 
 // --- budget ----------------------------------------------------------------
