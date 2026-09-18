@@ -1,6 +1,4 @@
-# jev-rules
-
-**Jev picks which of your rules apply to each prompt, so Claude only sees the ones that matter.**
+# Jev picks which of your rules apply to each prompt, so Claude only sees the ones that matter.
 
 <p>
   <img src="https://img.shields.io/badge/Claude%20Code-Plugin-5A67D8?style=for-the-badge" alt="Claude Code plugin" />

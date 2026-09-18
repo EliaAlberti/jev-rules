@@ -19,13 +19,13 @@ export const OUTPUT_BUDGET = 9000;
 /**
  * Decides which rules apply. Pure apart from the Jev call.
  *
- * @returns {Promise<{selected: Array<{rule, p: number|undefined, why: string}>, all: Array<{rule, p: number|undefined, injected: boolean, why: string}>, outcome: string, backend: string|null, model: string, ms: number, truncated: boolean}>}
+ * @returns {Promise<{selected: Array<{rule, p: number|undefined, why: string}>, all: Array<{rule, p: number|undefined, injected: boolean, why: string}>, outcome: string, backend: string|null, model: string, ms: number, attempts: number, truncated: boolean}>}
  */
 export async function decide({ rules, prompt, config, fetch: fetchImpl }) {
   // A rule with no description cannot be judged, so it is always injected.
   const always = rules.filter((r) => r.always || !r.description);
   const judged = rules.filter((r) => !r.always && r.description);
-  const base = { backend: config.backend, model: "none", ms: 0, truncated: false };
+  const base = { backend: config.backend, model: "none", ms: 0, attempts: 0, truncated: false };
   const entry = (rule, p, injected, why) => ({ rule, p, injected, why });
 
   const everything = (outcome, extra = {}) => {
@@ -50,7 +50,7 @@ export async function decide({ rules, prompt, config, fetch: fetchImpl }) {
       fetch: fetchImpl,
     });
   } catch (err) {
-    return everything(`fail-open:${err?.reason ?? "error"}`);
+    return everything(`fail-open:${err?.reason ?? "error"}`, { attempts: err?.attempts ?? 0 });
   }
 
   const all = [
@@ -65,6 +65,7 @@ export async function decide({ rules, prompt, config, fetch: fetchImpl }) {
     ...base,
     model: answer.model,
     ms: answer.ms,
+    attempts: answer.attempts,
     truncated: answer.truncated,
     outcome: "jev",
     all,
@@ -98,7 +99,7 @@ export function render(decision, total) {
 function formatLog(decision, sessionId, prompt) {
   const short = prompt.replace(/\s+/g, " ").slice(0, 80);
   const lines = [
-    `${new Date().toISOString()} session=${sessionId ?? "-"} backend=${decision.backend ?? "none"} model=${decision.model} ms=${decision.ms} outcome=${decision.outcome} truncated=${decision.truncated ? "yes" : "no"} prompt=${JSON.stringify(short)}`,
+    `${new Date().toISOString()} session=${sessionId ?? "-"} backend=${decision.backend ?? "none"} model=${decision.model} ms=${decision.ms} attempts=${decision.attempts} outcome=${decision.outcome} truncated=${decision.truncated ? "yes" : "no"} prompt=${JSON.stringify(short)}`,
   ];
   for (const { rule, p, injected, why } of decision.all) {
     const score = p === undefined ? why : `p=${p.toFixed(2)}`;
@@ -130,7 +131,7 @@ export async function run(input, deps = {}) {
     decision = await decide({ rules, prompt, config, fetch: deps.fetch ?? globalThis.fetch });
   } catch (err) {
     const all = rules.map((rule) => ({ rule, p: undefined, injected: true, why: "fail-open" }));
-    decision = { outcome: `fail-open:${err?.reason ?? "error"}`, backend: config.backend, model: "none", ms: 0, truncated: false, all, selected: all };
+    decision = { outcome: `fail-open:${err?.reason ?? "error"}`, backend: config.backend, model: "none", ms: 0, attempts: 0, truncated: false, all, selected: all };
   }
   const context = render(decision, rules.length);
   if (config.debug) appendDebug(home, formatLog(decision, input.session_id, prompt));

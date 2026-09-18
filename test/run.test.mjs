@@ -2,20 +2,24 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { readConfig, resolveEnv } from "../plugins/jev-rules/hooks/lib/config.mjs";
-import { BACKENDS, MAX_PROMPT_CHARS } from "../plugins/jev-rules/hooks/lib/jev.mjs";
+import { askJev, BACKENDS, MAX_PROMPT_CHARS } from "../plugins/jev-rules/hooks/lib/jev.mjs";
 import { OUTPUT_BUDGET, run } from "../plugins/jev-rules/hooks/lib/run.mjs";
 
 // --- helpers ---------------------------------------------------------------
 
+/** A project whose rules are `{ name: { body, ...frontmatter } }`; a name may contain `/`. */
 function project(rules) {
   const dir = mkdtempSync(join(tmpdir(), "jev-rules-project-"));
   const rulesDir = join(dir, ".claude", "jev-rules");
   mkdirSync(rulesDir, { recursive: true });
-  for (const [name, { description, always, body }] of Object.entries(rules)) {
-    const fm = ["---", description ? `description: ${description}` : null, always ? "always: true" : null, "---"].filter(Boolean).join("\n");
-    writeFileSync(join(rulesDir, `${name}.md`), `${fm}\n${body ?? `${name} body`}\n`);
+  for (const [name, { body, ...fields }] of Object.entries(rules)) {
+    const header = Object.entries(fields).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`);
+    const file = join(rulesDir, `${name}.md`);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, ["---", ...header, "---", body ?? `${name} body`, ""].join("\n"));
   }
   return dir;
 }
@@ -42,6 +46,26 @@ function fakeJev(score, { backend = "typesafe", calls = [] } = {}) {
     return new Response(JSON.stringify(payload), { status: 200 });
   };
 }
+
+/** A fetch that never answers and gives up only when its request is aborted. */
+const hang = (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason)));
+
+/** A fetch that answers call n with the nth handler (the last one repeats) and records when each call came. */
+function inTurn(calls, ...handlers) {
+  return async (url, init) => {
+    calls.push({ init, at: Date.now() });
+    return handlers[Math.min(calls.length, handlers.length) - 1](url, init);
+  };
+}
+
+/** A fetch handler that answers with an HTTP error. */
+const refuse = (status, headers = {}) => async () => new Response("try again later", { status, headers });
+
+/** Delays a fetch handler, to use up part of the budget. */
+const after = (ms, handler) => async (url, init) => {
+  await sleep(ms);
+  return handler(url, init);
+};
 
 const names = (context) => [...context.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
 
@@ -116,7 +140,6 @@ for (const [label, fetchImpl] of [
 
 test("fails open on timeout, within the configured deadline", async () => {
   const cwd = project(THREE);
-  const hang = (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason)));
   const started = Date.now();
   const context = await run({ prompt: "x", cwd }, { env: { ...TYPESAFE_ENV, JEV_RULES_TIMEOUT_MS: "100" }, home: home(), fetch: hang });
   assert.ok(Date.now() - started < 1500);
@@ -200,6 +223,31 @@ test("Vercel backend: boolean questions, gateway headers, probability answers", 
   assert.deepEqual(names(context), ["payments"]);
 });
 
+test("applies and does_not_apply reach both backends as criteria, and a rule without them sends none", async () => {
+  const cwd = project({
+    money: { description: "Changing payment code.", applies: "An amount is computed.", does_not_apply: "Only copy changes." },
+    ship: { description: "Deploying.", does_not_apply: "Only a local build." },
+    words: { description: "Writing prose." },
+  });
+  for (const [backend, env] of [["typesafe", TYPESAFE_ENV], ["vercel", VERCEL_ENV]]) {
+    const calls = [];
+    await run({ prompt: "x", cwd }, { env, home: home(), fetch: fakeJev(() => 1, { backend, calls }) });
+    const { questions } = calls[0].body;
+    assert.deepEqual(questions.r0.criteria, { true: "An amount is computed.", false: "Only copy changes." }, backend);
+    assert.deepEqual(questions.r1.criteria, { false: "Only a local build." }, backend);
+    assert.equal("criteria" in questions.r2, false, backend);
+  }
+});
+
+test("a rule in a subdirectory is injected under its path, and the path never reaches Jev", async () => {
+  const cwd = project({ "frontend/react": { description: "Changing React components." }, deploy: { description: "Deploying or releasing." } });
+  const calls = [];
+  const context = await run({ prompt: "x", cwd }, { env: TYPESAFE_ENV, home: home(), fetch: fakeJev(() => 0.9, { calls }) });
+  assert.deepEqual(names(context), ["deploy", "frontend/react"]);
+  assert.match(context, /^## frontend\/react\nfrontend\/react body$/m);
+  assert.equal(JSON.stringify(calls[0].body).includes("frontend"), false);
+});
+
 test("a JEV_API_KEY that starts with vck_ is routed to the gateway", () => {
   assert.equal(readConfig({ JEV_API_KEY: "vck_abc" }).backend, "vercel");
   assert.equal(readConfig({ JEV_API_KEY: "ts_abc" }).backend, "typesafe");
@@ -241,7 +289,7 @@ test("long prompts are cut before they reach Jev, and the debug log records ever
   await run({ prompt: long, cwd, session_id: "s1" }, { env: { ...TYPESAFE_ENV, JEV_DEBUG: "1" }, home: h, fetch: fakeJev(score, { calls }) });
   assert.equal(calls[0].body.state.request.length, MAX_PROMPT_CHARS);
   const log = readFileSync(join(h, ".jev-rules.log"), "utf8");
-  assert.match(log, /session=s1 backend=typesafe model=jev-1\.13\.0 ms=\d+ outcome=jev truncated=yes prompt="y{80}"/);
+  assert.match(log, /session=s1 backend=typesafe model=jev-1\.13\.0 ms=\d+ attempts=1 outcome=jev truncated=yes prompt="y{80}"/);
   assert.match(log, /^  payments p=0\.90 injected=yes$/m);
   assert.match(log, /^  deploy p=0\.20 injected=no$/m);
 });
@@ -250,4 +298,69 @@ test("no debug log is written unless JEV_DEBUG is set", async () => {
   const h = home();
   await run({ prompt: "x", cwd: project(THREE) }, { env: TYPESAFE_ENV, home: h, fetch: fakeJev(() => 1) });
   assert.equal(existsSync(join(h, ".jev-rules.log")), false);
+});
+
+// --- retry on rate limits --------------------------------------------------
+
+const PAYMENTS = [{ name: "payments", description: "Changing payment or checkout code." }];
+const ask = (fetch, timeoutMs = 2000) => askJev({ backend: "typesafe", key: "k", prompt: "x", rules: PAYMENTS, timeoutMs, fetch });
+
+test("a 429 then a 200 succeeds on the second attempt, with the same request after the default 200 ms wait", async () => {
+  const calls = [];
+  const answer = await ask(inTurn(calls, refuse(429), fakeJev(() => 0.9)));
+  assert.equal(answer.attempts, 2);
+  assert.equal(answer.probabilities.get("payments"), 0.9);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].init.body, calls[0].init.body);
+  assert.ok(calls[1].at - calls[0].at >= 190, `waited ${calls[1].at - calls[0].at} ms`);
+});
+
+test("a 529 is retried too, and Retry-After sets the wait up to a 300 ms cap", async () => {
+  const calls = [];
+  const answer = await ask(inTurn(calls, refuse(529, { "retry-after": "5" }), fakeJev(() => 0.9)));
+  assert.equal(answer.attempts, 2);
+  const wait = calls[1].at - calls[0].at;
+  assert.ok(wait >= 290 && wait < 1000, `waited ${wait} ms`);
+});
+
+test("two 429s fail open with http-429, and the debug log counts both attempts", async () => {
+  const cwd = project(THREE);
+  const h = home();
+  const calls = [];
+  const fetch = inTurn(calls, refuse(429, { "retry-after": "0" }));
+  const context = await run({ prompt: "x", cwd }, { env: { ...TYPESAFE_ENV, JEV_DEBUG: "1" }, home: h, fetch });
+  assert.deepEqual(names(context), ["deploy", "payments", "spelling"]);
+  assert.match(context, /Jev was unavailable: http-429\./);
+  assert.equal(calls.length, 2);
+  assert.match(readFileSync(join(h, ".jev-rules.log"), "utf8"), / ms=\d+ attempts=2 outcome=fail-open:http-429 /);
+});
+
+test("other HTTP errors and network errors are never retried", async () => {
+  for (const [handler, reason] of [
+    [refuse(500, { "retry-after": "0" }), "http-500"],
+    [async () => { throw new TypeError("fetch failed"); }, "network"],
+  ]) {
+    const calls = [];
+    await assert.rejects(ask(inTurn(calls, handler, fakeJev(() => 0.9))), { reason, attempts: 1 });
+    assert.equal(calls.length, 1, reason);
+  }
+});
+
+test("a 429 is not retried when less than 400 ms of the budget is left", async () => {
+  const calls = [];
+  const fetch = inTurn(calls, after(150, refuse(429, { "retry-after": "0" })), fakeJev(() => 0.9));
+  await assert.rejects(ask(fetch, 500), { reason: "http-429", attempts: 1 });
+  assert.equal(calls.length, 1);
+});
+
+test("the timeout is the budget for the whole call: a retry that hangs ends at the original deadline", async () => {
+  // 150 ms to the 429, then a 300 ms wait. A deadline restarted for the
+  // retry would fire at 1100 ms or later instead of 800.
+  const calls = [];
+  const started = Date.now();
+  const fetch = inTurn(calls, after(150, refuse(429, { "retry-after": "5" })), hang);
+  await assert.rejects(ask(fetch, 800), { reason: "timeout", attempts: 2 });
+  const took = Date.now() - started;
+  assert.ok(took >= 790 && took < 1050, `took ${took} ms`);
+  assert.equal(calls.length, 2);
 });
