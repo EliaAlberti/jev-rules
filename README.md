@@ -8,10 +8,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/EliaAlberti/jev-rules/releases/download/v0.2.0/jev-rules-rule-follows-the-file.mp4">
+  <a href="https://eliaalberti.github.io/jev-rules/">
     <img src="social/jev-rules-demo.gif" alt="A vague prompt gets no rules. Then Claude edits a checkout file and the payments rule arrives, scored 0.97." width="800" />
   </a><br />
-  <em>A real Claude Code session, 40 seconds. Click for the full-quality video.</em>
+  <em>A real Claude Code session, 40 seconds. <a href="https://eliaalberti.github.io/jev-rules/">Watch it in full quality</a> (plays in the browser, phone or desktop).</em>
 </p>
 
 If you use Claude Code for a while, you end up with a pile of standing instructions: test the payment code, use British spelling, follow the deploy checklist. Show all of them on every prompt and Claude wades through rules that have nothing to do with the request; pick them by keyword and a rule is missed the moment the request does not contain its trigger word. jev-rules asks a small, fast decision model called Jev one yes/no question per rule, "is this request about that?", and passes Claude only the rules that get a yes. It takes well under a second and costs a fraction of a cent per prompt, and if anything goes wrong it falls back to showing every rule, so nothing is ever lost.

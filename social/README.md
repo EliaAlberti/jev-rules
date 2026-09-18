@@ -28,7 +28,7 @@ Committed here are the two key stills per scenario at 1920 x 1080: `3-decided` (
 
 ## Notes for editing
 
-- In `follow-4-answer`, Claude's reply names the author's global `~/.claude/CLAUDE.md` and `RTK.md`. Harmless, but crop or blur for social if preferred.
+- `follow-4-answer` has one paragraph covered: Claude's reply listed the author's personal config files there.
 - Claude thinks for one to five minutes per reply at max effort. Speed-ramp or cut the thinking stretches.
 - Frames are captured by window id, so nothing else on the screen can appear in a clip, even when other windows cover the demo window. Cap's window mode records the screen area instead, so only use Cap with the demo window in front.
 
