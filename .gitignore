@@ -3,3 +3,7 @@
 node_modules/
 .DS_Store
 .claude/agents/
+# Raw recordings stay local; stills are committed
+social/video/
+*.cap
+social/stills/full/
