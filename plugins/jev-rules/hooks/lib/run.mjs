@@ -15,7 +15,7 @@ import { askJev, instructionFor, mapInstructionFor, MAX_PROMPT_CHARS } from "./j
 import { appendDebug } from "./log.mjs";
 import { loadMap } from "./map.mjs";
 import { loadRules } from "./rules.mjs";
-import { readState, STATE_DIR, writeState } from "./state.mjs";
+import { isDelivered, readState, resetDelivered, STATE_DIR, withDelivered, writeState } from "./state.mjs";
 
 export const RULES_DIR = join(".claude", "jev-rules");
 // Claude Code caps hook output at 10,000 characters and replaces anything
@@ -211,39 +211,63 @@ export async function run(input, deps = {}) {
   const docs = config.map ? loadMap(projectDir) : [];
   if (!rules.length && !docs.length) return null;
 
+  // Once per session: what Claude already has is neither judged nor sent
+  // again. JEV_RULES_REPEAT=1 brings back delivery on every matching prompt.
+  const stateDir = deps.stateDir ?? STATE_DIR;
+  const state = readState(stateDir, input.session_id);
+  const fresh = config.repeat ? rules : rules.filter((r) => !isDelivered(state, "rule", r));
+  const freshDocs = config.repeat ? docs : docs.filter((d) => !isDelivered(state, "map", d));
+  const seenLines = [
+    ...rules.filter((r) => !fresh.includes(r)).map((r) => `  ${r.name} delivered-earlier injected=seen`),
+    ...docs.filter((d) => !freshDocs.includes(d)).map((d) => `  map:${d.name} delivered-earlier injected=seen`),
+  ];
+  const short = prompt.replace(/\s+/g, " ").slice(0, 80);
+
+  if (!fresh.length && !freshDocs.length) {
+    if (config.debug) {
+      const nothing = { backend: config.backend, model: "none", ms: 0, attempts: 0, outcome: "nothing-new", truncated: false, all: [], map: [] };
+      appendDebug(home, [...formatLog(nothing, input.session_id, "prompt", `prompt=${JSON.stringify(short)}`), ...seenLines]);
+    }
+    return null;
+  }
+
   let decision;
   try {
-    decision = await decide({ rules, docs, prompt, config, fetch: deps.fetch ?? globalThis.fetch });
+    decision = await decide({ rules: fresh, docs: freshDocs, prompt, config, fetch: deps.fetch ?? globalThis.fetch });
   } catch (err) {
-    decision = failOpenDecision(rules, config, err, docs);
+    decision = failOpenDecision(fresh, config, err, freshDocs);
   }
   const sections = [];
   let shown = [];
-  if (rules.length) {
+  if (fresh.length) {
     const rendered = render(decision, rules.length);
     shown = rendered.shown;
     // Nothing applies: say nothing, rather than an empty heading on every prompt.
     if (shown.length) sections.push(rendered.text);
   }
   let placed = new Map();
-  if (docs.length) {
+  if (freshDocs.length) {
     // Rules come first; the map gets the room they leave, less the blank line between.
     const room = OUTPUT_BUDGET - (sections.length ? sections[0].length + 2 : 0);
     const map = renderMap(decision, docs.length, room);
     placed = map.placed;
     if (map.text && placed.size) sections.push(map.text);
   }
-  if (config.edits && rules.length) {
+  if (!config.repeat || (config.edits && rules.length)) {
     // A prompt starts a new turn: the rules it shows replace the last turn's
-    // list, and Jev's answers about files stay valid. Map documents are not
-    // recorded; the edit hook never offers them.
-    const stateDir = deps.stateDir ?? STATE_DIR;
-    const { files } = readState(stateDir, input.session_id);
-    writeState(stateDir, input.session_id, { injected: shown.map((rule) => rule.name), files });
+    // list, and Jev's answers about files stay valid. What was shown, as a
+    // body or as a pointer, is remembered for the session.
+    const delivered = config.repeat ? state.delivered : withDelivered(withDelivered(state.delivered, "rule", shown), "map", [...placed.keys()]);
+    writeState(stateDir, input.session_id, { injected: shown.map((rule) => rule.name), files: state.files, delivered });
   }
   if (config.debug) {
-    const short = prompt.replace(/\s+/g, " ").slice(0, 80);
-    appendDebug(home, formatLog(decision, input.session_id, "prompt", `prompt=${JSON.stringify(short)}`, placed));
+    appendDebug(home, [...formatLog(decision, input.session_id, "prompt", `prompt=${JSON.stringify(short)}`, placed), ...seenLines]);
   }
   return sections.join("\n\n") || null;
+}
+
+/** SessionStart hook: after /clear or a compaction the context is new, so everything is deliverable again. */
+export async function runSessionStart(input, deps = {}) {
+  if (input?.source === "clear" || input?.source === "compact") resetDelivered(deps.stateDir ?? STATE_DIR, input.session_id);
+  return null;
 }

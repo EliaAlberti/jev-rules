@@ -163,11 +163,11 @@ test("applies and does_not_apply reach Jev as criteria for map documents on both
 
 // --- selection -------------------------------------------------------------
 
-test("a project with map documents and no rules gets the map section alone, and keeps no session state", async () => {
+test("a project with map documents and no rules gets the map section alone, and in repeat mode keeps no session state", async () => {
   const cwd = mapProject(TWO);
   const calls = [];
   const state = stateDir();
-  const context = await prompt(cwd, { env: TYPESAFE_ENV, stateDir: state, fetch: fakeJev(scores({ "How checkout computes totals.": 0.9 }), { calls }) });
+  const context = await prompt(cwd, { env: { ...TYPESAFE_ENV, JEV_RULES_REPEAT: "1" }, stateDir: state, fetch: fakeJev(scores({ "How checkout computes totals.": 0.9 }), { calls }) });
   assert.equal(context, "Codebase map documents relevant to this request (jev-rules, 1 of 2):\n\n## checkout\n# Checkout\nSECRET_CHECKOUT_BODY");
   assert.deepEqual(Object.keys(calls[0].body.questions), ["m0", "m1"]);
   assert.deepEqual(readdirSync(state), []);

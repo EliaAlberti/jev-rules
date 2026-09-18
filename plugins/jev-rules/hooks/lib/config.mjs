@@ -40,7 +40,7 @@ function number(value, fallback, { min, max }) {
 const OFF = /^(0|false|no)$/i;
 
 /**
- * @returns {{backend: "typesafe"|"vercel"|null, key: string|null, threshold: number, timeoutMs: number, debug: boolean, edits: boolean, map: boolean}}
+ * @returns {{backend: "typesafe"|"vercel"|null, key: string|null, threshold: number, timeoutMs: number, debug: boolean, edits: boolean, map: boolean, repeat: boolean}}
  */
 export function readConfig(env) {
   const direct = env.JEV_API_KEY || env.TYPESAFE_API_KEY || "";
@@ -62,5 +62,7 @@ export function readConfig(env) {
     debug: Boolean(env.JEV_DEBUG) && !OFF.test(env.JEV_DEBUG),
     edits: !OFF.test(env.JEV_RULES_EDITS ?? ""),
     map: !OFF.test(env.JEV_RULES_MAP ?? ""),
+    // Off by default: each rule and document is delivered once per session.
+    repeat: Boolean(env.JEV_RULES_REPEAT) && !OFF.test(env.JEV_RULES_REPEAT),
   };
 }

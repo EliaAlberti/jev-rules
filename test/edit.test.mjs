@@ -113,8 +113,8 @@ test("a second edit to the same file makes no Jev call", async () => {
   assert.equal(s.calls.length, 1);
 });
 
-test("a new prompt starts a new turn: a rule can come back, answered from the cache", async () => {
-  const s = session();
+test("with JEV_RULES_REPEAT=1 a new prompt starts a new turn: a rule can come back, answered from the cache", async () => {
+  const s = session({ env: { ...TYPESAFE_ENV, JEV_RULES_REPEAT: "1" } });
   assert.deepEqual(names(await s.edit("src/checkout/discount.ts")), ["payments"]);
   assert.equal(await s.edit("src/checkout/discount.ts"), null);
   await s.prompt("now tidy the logging", () => 0.1);
@@ -145,8 +145,8 @@ test("the cache key follows what Jev reads about a rule, and nothing else", () =
 
 // --- fail open -------------------------------------------------------------
 
-test("when Jev fails, the remaining rules are injected once for the turn, and the failure is not cached", async () => {
-  const s = session();
+test("with JEV_RULES_REPEAT=1, when Jev fails the remaining rules are injected once for the turn, and the failure is not cached", async () => {
+  const s = session({ env: { ...TYPESAFE_ENV, JEV_RULES_REPEAT: "1" } });
   let failures = 0;
   const down = async () => {
     failures += 1;
@@ -224,8 +224,8 @@ test("another tool, or an edit without a path, prints nothing and asks nothing",
   assert.deepEqual(readdirSync(s.deps.stateDir), []);
 });
 
-test("JEV_RULES_EDITS=0 turns the edit hook off, and the prompt hook then keeps no state", async () => {
-  const s = session({ env: { ...TYPESAFE_ENV, JEV_RULES_EDITS: "0" } });
+test("JEV_RULES_EDITS=0 turns the edit hook off, and in repeat mode the prompt hook then keeps no state", async () => {
+  const s = session({ env: { ...TYPESAFE_ENV, JEV_RULES_EDITS: "0", JEV_RULES_REPEAT: "1" } });
   assert.deepEqual(names(await s.prompt("fix the checkout", onlyPayments)), ["payments"]);
   assert.equal(await s.edit("src/checkout/discount.ts"), null);
   assert.equal(s.calls.length, 0);
@@ -267,14 +267,14 @@ test("state is written whole with no temporary file left, and files untouched fo
   utimesSync(join(dir, "recent.json"), daysAgo(6), daysAgo(6));
   writeState(dir, "s1", { injected: ["payments"], files: { "a.ts": { k: 0.5 } } });
   assert.deepEqual(readdirSync(dir).sort(), ["recent.json", "s1.json"]);
-  assert.deepEqual(readState(dir, "s1"), { injected: ["payments"], files: { "a.ts": { k: 0.5 } } });
+  assert.deepEqual(readState(dir, "s1"), { injected: ["payments"], files: { "a.ts": { k: 0.5 } }, delivered: {} });
 });
 
 test("a session id that is not a plain name gets no state file", () => {
   const dir = stateDir();
   for (const id of ["../escape", "a/b", "", undefined, 42]) {
     writeState(dir, id, { injected: ["x"], files: {} });
-    assert.deepEqual(readState(dir, id), { injected: [], files: {} }, String(id));
+    assert.deepEqual(readState(dir, id), { injected: [], files: {}, delivered: {} }, String(id));
   }
   assert.deepEqual(readdirSync(dir), []);
   assert.equal(existsSync(join(dir, "..", "escape.json")), false);
@@ -283,7 +283,7 @@ test("a session id that is not a plain name gets no state file", () => {
 // --- debug log -------------------------------------------------------------
 
 test("the debug log records each edit with the file and how many answers came from the cache", async () => {
-  const s = session({ env: { ...TYPESAFE_ENV, JEV_DEBUG: "1" } });
+  const s = session({ env: { ...TYPESAFE_ENV, JEV_DEBUG: "1", JEV_RULES_REPEAT: "1" } });
   await s.edit("src/checkout/discount.ts");
   await s.prompt("next", () => 0.1);
   await s.edit("src/checkout/discount.ts");

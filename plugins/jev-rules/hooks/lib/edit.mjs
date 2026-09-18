@@ -17,7 +17,7 @@ import { criteriaFor, fileInstructionFor } from "./jev.mjs";
 import { appendDebug } from "./log.mjs";
 import { loadRules } from "./rules.mjs";
 import { failOpenDecision, formatLog, judge, projectDirOf, render, RULES_DIR } from "./run.mjs";
-import { readState, STATE_DIR, writeState } from "./state.mjs";
+import { isDelivered, readState, STATE_DIR, withDelivered, writeState } from "./state.mjs";
 
 // Where each file-changing tool puts the path it is about to change. Current
 // Claude Code has no MultiEdit, but older versions still send it.
@@ -96,7 +96,8 @@ export async function runEdit(input, deps = {}) {
   const stateDir = deps.stateDir ?? STATE_DIR;
   const state = readState(stateDir, input.session_id);
   // Rules marked always, or with no description, already came with the prompt.
-  const candidates = rules.filter((r) => !r.always && r.description && !state.injected.includes(r.name));
+  // Nor is anything Claude was already given this turn, or, by default, this session.
+  const candidates = rules.filter((r) => !r.always && r.description && !state.injected.includes(r.name) && (config.repeat || !isDelivered(state, "rule", r)));
   if (!candidates.length) return null;
 
   const cache = Object.hasOwn(state.files, file) ? state.files[file] : {};
@@ -113,6 +114,7 @@ export async function runEdit(input, deps = {}) {
   writeState(stateDir, input.session_id, {
     injected: [...state.injected, ...shown.map((rule) => rule.name)],
     files: { ...state.files, [file]: { ...cache, ...Object.fromEntries(answered) } },
+    delivered: config.repeat ? state.delivered : withDelivered(state.delivered, "rule", shown),
   });
   if (config.debug) {
     const fromCache = decision.all.filter((e) => e.why === "cached").length;

@@ -1,7 +1,7 @@
 {
   "name": "jev-rules",
   "displayName": "jev-rules",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Jev picks which of your rules apply to each prompt, so Claude only sees the ones that matter.",
   "author": {
     "name": "Elia Alberti",

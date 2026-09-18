@@ -7,7 +7,7 @@
 
 import { readFileSync } from "node:fs";
 import { runEdit } from "./lib/edit.mjs";
-import { run } from "./lib/run.mjs";
+import { run, runSessionStart } from "./lib/run.mjs";
 
 process.exitCode = 0;
 const quiet = () => {};
@@ -17,6 +17,7 @@ process.on("unhandledRejection", quiet);
 const HOOKS = new Map([
   ["UserPromptSubmit", run],
   ["PreToolUse", runEdit],
+  ["SessionStart", runSessionStart],
 ]);
 
 let input = {};

@@ -1,14 +1,15 @@
-// Per-session memory shared by the two hooks: which rules Claude has been
-// given this turn, and Jev's answers for each file, so the edit hook neither
-// repeats a rule nor asks twice about the same file. One small JSON file per
-// session in the system temp directory:
+// Per-session memory shared by the hooks: what Claude has already been given
+// this session (so a rule or map document enters the context once, not on
+// every prompt), which rules came this turn, and Jev's answers for each file.
+// One small JSON file per session in the system temp directory:
 //
-//   { "injected": ["payments"], "files": { "src/checkout.ts": { "<cacheKey>": 0.93 } } }
+//   { "delivered": { "rule:payments": "<fingerprint>" }, "injected": ["payments"],
+//     "files": { "src/checkout.ts": { "<cacheKey>": 0.93 } } }
 //
 // Any failure reads as an empty state. The worst that costs is a repeated
 // rule or an extra Jev call, never a blocked prompt or edit.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,7 +37,7 @@ export function readState(dir, sessionId) {
   } catch {
     // Missing or corrupt: start again.
   }
-  if (!isRecord(raw)) return { injected: [], files: {} };
+  if (!isRecord(raw)) return { injected: [], files: {}, delivered: {} };
   // fromEntries rather than assignment, so a file called __proto__ stays an ordinary key.
   const files = Object.fromEntries(
     Object.entries(isRecord(raw.files) ? raw.files : {})
@@ -44,7 +45,32 @@ export function readState(dir, sessionId) {
       .map(([path, answers]) => [path, Object.fromEntries(Object.entries(answers).filter(([, p]) => isScore(p)))]),
   );
   const injected = Array.isArray(raw.injected) ? raw.injected.filter((name) => typeof name === "string") : [];
-  return { injected, files };
+  const delivered = Object.fromEntries(Object.entries(isRecord(raw.delivered) ? raw.delivered : {}).filter(([, mark]) => typeof mark === "string"));
+  return { injected, files, delivered };
+}
+
+/** What identifies one delivery: the item and the exact text Claude was given. */
+const fingerprint = (item) => createHash("sha1").update(`${item.name}\n${item.body}`).digest("hex").slice(0, 16);
+const deliveredKey = (kind, item) => `${kind}:${item.name}`;
+
+/** True when Claude already has this rule ("rule") or map document ("map") in this session, unchanged. */
+export function isDelivered(state, kind, item) {
+  return Object.hasOwn(state.delivered, deliveredKey(kind, item)) && state.delivered[deliveredKey(kind, item)] === fingerprint(item);
+}
+
+/** `delivered` with these items added. An edited rule gets a new fingerprint, so it is given again. */
+export function withDelivered(delivered, kind, items) {
+  return { ...delivered, ...Object.fromEntries(items.map((item) => [deliveredKey(kind, item), fingerprint(item)])) };
+}
+
+/**
+ * Forgets what was delivered. After /clear or a compaction the rules are no
+ * longer in Claude's context, so they have to be deliverable again. Jev's
+ * answers about files stay valid.
+ */
+export function resetDelivered(dir, sessionId) {
+  const state = readState(dir, sessionId);
+  writeState(dir, sessionId, { injected: [], files: state.files, delivered: {} });
 }
 
 /**
