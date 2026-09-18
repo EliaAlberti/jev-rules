@@ -184,10 +184,10 @@ TypeSafe's published price is $0.042 per million input tokens, with output token
 
 **Context tokens.** Measured on the demo project in [`social/demo/shop`](social/demo/shop) (12 rules, 3 map documents, real Jev calls):
 
-| Session | Loading everything up front | jev-rules 0.3.0 | 0.2.0 behaviour (`JEV_RULES_REPEAT=1`) |
-| --- | --- | --- | --- |
-| 8 prompts, all about checkout | about 1,390 tokens | about 330 tokens | about 2,510 tokens |
-| 12 prompts touching nearly every topic | about 1,390 tokens | about 1,400 tokens | about 3,000 tokens |
+| Session | Loading everything up front | With jev-rules |
+| --- | --- | --- |
+| 8 prompts, all about checkout | about 1,390 tokens | about 330 tokens |
+| 12 prompts touching nearly every topic | about 1,390 tokens | about 1,400 tokens |
 
 So the saving depends on how much of your rule set a session touches: a focused session uses a quarter of the tokens, a session that touches everything breaks even, and it never grows with the length of the session. The more rules a project has, the larger the gap. Jev is also asked about fewer rules as the session goes on, and not at all once everything relevant has been delivered.
 
