@@ -1,0 +1,16 @@
+{
+  "$schema": "https://code.claude.com/schema/marketplace.json",
+  "name": "jev-rules",
+  "description": "Jev picks which of your rules apply to each prompt, so Claude only sees the ones that matter.",
+  "owner": {
+    "name": "Elia Alberti",
+    "url": "https://github.com/EliaAlberti"
+  },
+  "plugins": [
+    {
+      "name": "jev-rules",
+      "source": "./plugins/jev-rules",
+      "description": "Jev picks which of your rules apply to each prompt, so Claude only sees the ones that matter."
+    }
+  ]
+}

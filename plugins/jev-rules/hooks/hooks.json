@@ -1,0 +1,16 @@
+{
+  "description": "jev-rules: ask Jev which project rules apply to this prompt and inject only those",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/jev-rules.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
