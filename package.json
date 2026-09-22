@@ -1,6 +1,6 @@
 {
   "name": "jev-rules",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Jev picks which of your rules apply to each prompt, so Claude only sees the ones that matter.",
   "type": "module",

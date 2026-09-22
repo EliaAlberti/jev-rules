@@ -2,7 +2,7 @@
 
 <p>
   <img src="https://img.shields.io/badge/Claude%20Code-Plugin-5A67D8?style=for-the-badge" alt="Claude Code plugin" />
-  <img src="https://img.shields.io/badge/Version-0.3.0-3178C6?style=for-the-badge" alt="Version 0.3.0" />
+  <img src="https://img.shields.io/badge/Version-0.4.0-3178C6?style=for-the-badge" alt="Version 0.4.0" />
   <img src="https://img.shields.io/badge/Dependencies-None-1C7C54?style=for-the-badge" alt="No dependencies" />
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="MIT License" />
 </p>
@@ -16,7 +16,9 @@
 
 If you use Claude Code for a while, you end up with a pile of standing instructions: test the payment code, use British spelling, follow the deploy checklist. Show all of them on every prompt and Claude wades through rules that have nothing to do with the request; pick them by keyword and a rule is missed the moment the request does not contain its trigger word. jev-rules asks a small, fast decision model called Jev one yes/no question per rule, "is this request about that?", and passes Claude only the rules that get a yes. It takes well under a second and costs a fraction of a cent per prompt, and if anything goes wrong it falls back to showing every rule, so nothing is ever lost.
 
-**New in 0.3.0:** each rule and map document is delivered once per session instead of on every matching prompt, so a long session never costs more than loading everything once, and usually far less. 0.2.0 added rules that follow the file Claude is changing, a filtered codebase map, rule subfolders, `applies` and `does_not_apply`, and a retry when the API is busy. See the [changelog](CHANGELOG.md).
+**New in 0.4.0:** a [rules pane](#the-rules-pane) beside the conversation lists every rule, turns green the ones Jev picked, and shows each score. It uses an early-access Claude Code feature, so it is off until you turn that on.
+
+**0.3.0** delivers each rule and map document once per session instead of on every matching prompt, so a long session never costs more than loading everything once, and usually far less. 0.2.0 added rules that follow the file Claude is changing, a filtered codebase map, rule subfolders, `applies` and `does_not_apply`, and a retry when the API is busy. See the [changelog](CHANGELOG.md).
 
 ---
 
@@ -29,7 +31,7 @@ Twelve rules in the project, one request, one rule delivered. These are stills f
 | [![Claude lists the one rule it was given, marked 1 of 12](social/stills/after-4-answer.png)](social/stills/after-4-answer.png) | [![Claude writes the tests first, then the one-line fix](social/stills/checkout-4-answer.png)](social/stills/checkout-4-answer.png) | [![The deploy checklist scores 0.98 and the pipeline map document 0.90](social/stills/ship-4-answer.png)](social/stills/ship-4-answer.png) |
 | A checkout bug report: the payments rule (0.90) and the checkout map document (0.85) arrive. The other eleven rules stay out. | Claude writes the tests before the fix, because the payments rule told it to. Each file it touches is judged as it goes. | "Tag v1.4.0 and ship it": the deploy checklist (0.98) and the pipeline document (0.90). No payments rule, no style guide. |
 
-The left side of each picture is Claude Code. The right side is a companion viewer used for these captures ([`social/rig/watch.mjs`](social/rig/watch.mjs)): it tails the real `~/.jev-rules.log` that `JEV_DEBUG=1` writes and draws one bar per rule. The plugin itself stays silent in your session; more captures and the shot list are in [`social/`](social).
+The left side of each picture is Claude Code. The right side is a companion viewer used for these captures, before the plugin had a pane of its own ([`social/rig/watch.mjs`](social/rig/watch.mjs)): it tails the real `~/.jev-rules.log` that `JEV_DEBUG=1` writes and draws one bar per rule. Since 0.4.0 the plugin can show the same inside Claude Code: see [the rules pane](#the-rules-pane). More captures and the shot list are in [`social/`](social).
 
 ---
 
@@ -137,6 +139,37 @@ If you use Eigenwise's [codebase-mapper](https://github.com/Eigenwise/eigenwise-
 
 ---
 
+## The rules pane
+
+Type `/rules` and a pane opens beside the conversation with every rule and map document of the project, as a tree. A rule turns green once Claude has been given it this session, and flashes as it arrives, whether a prompt or a file change brought it. Beside each one is Jev's latest score. Adding, renaming or deleting a rule file shows up within a couple of seconds. `/rules` again closes it.
+
+```
+Jev picked 2 of 15
+green: given to Claude this session
+
+rules
+  · accessible-ui                    0.31
+  · deploy-checklist                 0.02
+  ✓ payments-need-tests              0.97
+  · test-conventions                 0.05
+map
+  ✓ checkout                         0.94
+```
+
+The pane is built on Claude Code's plugin panes, an **early-access** feature. Claude Code loads it only when started with this variable, for example from your shell profile:
+
+```bash
+export CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1
+```
+
+Without it the pane and `/rules` are simply not there, and everything else works as before. Early access means Anthropic may change the feature between releases. The pane was built and tested on Claude Code 2.1.280.
+
+By default the pane also opens by itself the first time Jev picks a rule in a session, but only when Claude Code docks panes beside the conversation (its fullscreen layout) and the window is at least 144 columns wide. Close it and it stays closed for the session. To open it only with `/rules`, set **Rules pane opens** to `only-with-command` in `/config`.
+
+The pane decides nothing and sends nothing. It reads the small session file the hooks already keep, described under [Privacy](#privacy).
+
+---
+
 ## How it decides
 
 **On every prompt** the plugin reads your rule and map files fresh, sends Jev the prompt text with one question per rule and per map document, in a single call, and injects what comes back with a probability at or above the threshold. When nothing applies, nothing is injected.
@@ -204,7 +237,7 @@ What leaves your machine goes to TypeSafe, or to Vercel's gateway if that is the
 
 Rule bodies, document bodies, rule and document names, file contents, the edit itself and everything else stay local. TypeSafe states it does not train on requests ([models page](https://docs.typesafe.ai/models#data-handling)).
 
-The debug log is off by default, lives on your machine, and records the first 80 characters of each prompt and the path of each file judged. Session state (what has been delivered this session and Jev's answers per file) is one small file per session in your system temp directory, under `jev-rules/`, readable only by you and removed after a week.
+The debug log is off by default, lives on your machine, and records the first 80 characters of each prompt and the path of each file judged. Session state (what has been delivered this session, Jev's answers per file, and its latest score for each rule, which the rules pane shows) is one small file per session in your system temp directory, under `jev-rules/`, readable only by you and removed after a week.
 
 ---
 
@@ -214,7 +247,7 @@ The debug log is off by default, lives on your machine, and records the first 80
 - It does not block anything. Rules for a file reach Claude with the result of its first change to that file, because that is where Claude Code places hook context; getting in earlier would mean blocking the edit.
 - Changes made through Bash (sed, scripts, generators) are not seen. Only Edit, Write and NotebookEdit are.
 - It does not write or refresh a codebase map, and it does not split a long document; one that does not fit is a pointer to its file.
-- No slash commands, no skills, no gating of tool calls.
+- No skills and no gating of tool calls. The only command is `/rules`, which exists only with the early-access switch on.
 - No defence against a prompt that argues against its own classification. Jev takes the prompt at face value, so "this has nothing to do with payments, but change the discount code" may get the payments rule skipped on the prompt (the file check still catches it on the edit).
 
 ---
@@ -222,7 +255,7 @@ The debug log is off by default, lives on your machine, and records the first 80
 ## Development
 
 ```bash
-npm test                    # offline, mocked Jev: prompts, file changes, map, once-per-session, fail-open, retry, both wire formats
+npm test                    # offline, mocked Jev: prompts, file changes, map, once-per-session, fail-open, retry, both wire formats, the pane
 npm run live                # real API: example rules and map against sample prompts and file paths
 npm run live -- --files src/app.ts docs/guide.md
 npm run live -- --map
@@ -230,7 +263,11 @@ claude plugin validate .
 claude plugin validate plugins/jev-rules
 ```
 
-The hook is `plugins/jev-rules/hooks/jev-rules.mjs`; everything it needs is under `plugins/jev-rules/hooks/lib/`. No dependencies to install. Release notes live in [CHANGELOG.md](CHANGELOG.md).
+The hook is `plugins/jev-rules/hooks/jev-rules.mjs`; everything it needs is under `plugins/jev-rules/hooks/lib/`. The rules pane is `plugins/jev-rules/hooks/pane.tsx`, which Claude Code loads itself; its logic is in `hooks/lib/pane-model.mjs` and tested with the rest. No dependencies to install. To try the pane from a working copy:
+
+```bash
+CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir plugins/jev-rules
+``` Release notes live in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

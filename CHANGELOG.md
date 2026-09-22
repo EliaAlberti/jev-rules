@@ -2,6 +2,31 @@
 
 All notable changes to jev-rules. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-09-22
+
+### Added
+
+- **The rules pane.** `/rules` opens a pane beside the conversation with every rule and map document as a tree. A rule turns green once Claude has been given it this session and flashes as it arrives, from a prompt or a file change, with Jev's latest score beside it. Rule files added, renamed or removed show up within a couple of seconds.
+- The pane opens by itself the first time Jev picks a rule in a session, when Claude Code docks panes beside the conversation and the window is at least 144 columns wide. Closing it keeps it closed for the session. The **Rules pane opens** setting in `/config` switches this to `only-with-command`.
+- 12 new offline tests (113 in total).
+
+### Changed
+
+- The session state file also keeps Jev's latest score for each rule and map document, for the pane to show. It is cleared with the rest after `/clear` or a compaction.
+
+### Early access
+
+The pane uses Claude Code's plugin panes, an early-access feature that is only loaded with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`. Without it the pane and `/rules` are absent and the plugin works exactly as in 0.3.0. Built and tested on Claude Code 2.1.280.
+
+### Upgrade
+
+```bash
+claude plugin marketplace update jev-rules
+claude plugin update jev-rules@jev-rules
+```
+
+Restart Claude Code afterwards, with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` set if you want the pane.
+
 ## [0.3.0] - 2026-09-18
 
 ### Changed
@@ -65,6 +90,7 @@ Initial release.
 - Two routes to the same model: TypeSafe's API (`JEV_API_KEY`, `TYPESAFE_API_KEY`) and Vercel AI Gateway (`AI_GATEWAY_API_KEY`). Node 20.12+, no dependencies.
 - `JEV_DEBUG=1` decision log at `~/.jev-rules.log`, three example rules, offline tests and a live script.
 
+[0.4.0]: https://github.com/EliaAlberti/jev-rules/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/EliaAlberti/jev-rules/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/EliaAlberti/jev-rules/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/EliaAlberti/jev-rules/releases/tag/v0.1.0
