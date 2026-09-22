@@ -4,7 +4,11 @@
 // One small JSON file per session in the system temp directory:
 //
 //   { "delivered": { "rule:payments": "<fingerprint>" }, "injected": ["payments"],
-//     "files": { "src/checkout.ts": { "<cacheKey>": 0.93 } } }
+//     "files": { "src/checkout.ts": { "<cacheKey>": 0.93 } },
+//     "scores": { "rule:payments": { "p": 0.97, "via": "edit", "file": "src/checkout.ts" } } }
+//
+// `scores` holds Jev's latest answer for each rule and map document, for the
+// rules pane to show. Nothing in the hooks reads it back.
 //
 // Any failure reads as an empty state. The worst that costs is a repeated
 // rule or an extra Jev call, never a blocked prompt or edit.
@@ -37,7 +41,7 @@ export function readState(dir, sessionId) {
   } catch {
     // Missing or corrupt: start again.
   }
-  if (!isRecord(raw)) return { injected: [], files: {}, delivered: {} };
+  if (!isRecord(raw)) return { injected: [], files: {}, delivered: {}, scores: {} };
   // fromEntries rather than assignment, so a file called __proto__ stays an ordinary key.
   const files = Object.fromEntries(
     Object.entries(isRecord(raw.files) ? raw.files : {})
@@ -46,7 +50,29 @@ export function readState(dir, sessionId) {
   );
   const injected = Array.isArray(raw.injected) ? raw.injected.filter((name) => typeof name === "string") : [];
   const delivered = Object.fromEntries(Object.entries(isRecord(raw.delivered) ? raw.delivered : {}).filter(([, mark]) => typeof mark === "string"));
-  return { injected, files, delivered };
+  const scores = Object.fromEntries(
+    Object.entries(isRecord(raw.scores) ? raw.scores : {}).filter(([, s]) => isRecord(s) && isScore(s.p) && (s.via === "prompt" || s.via === "edit")),
+  );
+  return { injected, files, delivered, scores };
+}
+
+/**
+ * `scores` with Jev's answers from one decision added: the latest answer for
+ * each rule and map document wins. Entries without a score (always, fail-open)
+ * leave what was there.
+ *
+ * @param {object} scores the current map
+ * @param {object} decision `{ all, map? }` from decide or decideEdit
+ * @param {"prompt"|"edit"} via what was judged
+ * @param {string} [file] the project-relative path, for an edit
+ */
+export function withScores(scores, decision, via, file) {
+  const answer = (p) => (via === "edit" && file ? { p, via, file } : { p, via });
+  const pairs = [
+    ...(decision.all ?? []).filter((e) => isScore(e.p)).map((e) => [`rule:${e.rule.name}`, answer(e.p)]),
+    ...(decision.map ?? []).filter((e) => isScore(e.p)).map((e) => [`map:${e.rule.name}`, answer(e.p)]),
+  ];
+  return { ...scores, ...Object.fromEntries(pairs) };
 }
 
 /** What identifies one delivery: the item and the exact text Claude was given. */
@@ -70,7 +96,7 @@ export function withDelivered(delivered, kind, items) {
  */
 export function resetDelivered(dir, sessionId) {
   const state = readState(dir, sessionId);
-  writeState(dir, sessionId, { injected: [], files: state.files, delivered: {} });
+  writeState(dir, sessionId, { injected: [], files: state.files, delivered: {}, scores: {} });
 }
 
 /**

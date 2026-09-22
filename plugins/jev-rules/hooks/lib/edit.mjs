@@ -17,7 +17,7 @@ import { criteriaFor, fileInstructionFor } from "./jev.mjs";
 import { appendDebug } from "./log.mjs";
 import { loadRules } from "./rules.mjs";
 import { failOpenDecision, formatLog, judge, projectDirOf, render, RULES_DIR } from "./run.mjs";
-import { isDelivered, readState, STATE_DIR, withDelivered, writeState } from "./state.mjs";
+import { isDelivered, readState, STATE_DIR, withDelivered, withScores, writeState } from "./state.mjs";
 
 // Where each file-changing tool puts the path it is about to change. Current
 // Claude Code has no MultiEdit, but older versions still send it.
@@ -115,6 +115,7 @@ export async function runEdit(input, deps = {}) {
     injected: [...state.injected, ...shown.map((rule) => rule.name)],
     files: { ...state.files, [file]: { ...cache, ...Object.fromEntries(answered) } },
     delivered: config.repeat ? state.delivered : withDelivered(state.delivered, "rule", shown),
+    scores: withScores(state.scores, decision, "edit", file),
   });
   if (config.debug) {
     const fromCache = decision.all.filter((e) => e.why === "cached").length;

@@ -15,7 +15,7 @@ import { askJev, instructionFor, mapInstructionFor, MAX_PROMPT_CHARS } from "./j
 import { appendDebug } from "./log.mjs";
 import { loadMap } from "./map.mjs";
 import { loadRules } from "./rules.mjs";
-import { isDelivered, readState, resetDelivered, STATE_DIR, withDelivered, writeState } from "./state.mjs";
+import { isDelivered, readState, resetDelivered, STATE_DIR, withDelivered, withScores, writeState } from "./state.mjs";
 
 export const RULES_DIR = join(".claude", "jev-rules");
 // Claude Code caps hook output at 10,000 characters and replaces anything
@@ -258,7 +258,7 @@ export async function run(input, deps = {}) {
     // list, and Jev's answers about files stay valid. What was shown, as a
     // body or as a pointer, is remembered for the session.
     const delivered = config.repeat ? state.delivered : withDelivered(withDelivered(state.delivered, "rule", shown), "map", [...placed.keys()]);
-    writeState(stateDir, input.session_id, { injected: shown.map((rule) => rule.name), files: state.files, delivered });
+    writeState(stateDir, input.session_id, { injected: shown.map((rule) => rule.name), files: state.files, delivered, scores: withScores(state.scores, decision, "prompt") });
   }
   if (config.debug) {
     appendDebug(home, [...formatLog(decision, input.session_id, "prompt", `prompt=${JSON.stringify(short)}`, placed), ...seenLines]);

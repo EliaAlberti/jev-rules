@@ -136,3 +136,39 @@ test("without a session id nothing is remembered, so delivery repeats rather tha
   assert.deepEqual(names(await s.prompt("fix the checkout total", onlyPayments, null)), ["payments"]);
   assert.deepEqual(names(await s.prompt("fix the checkout total", onlyPayments, null)), ["payments"]);
 });
+
+// Scores for the rules pane: Jev's latest answer per rule and map document.
+
+test("the session record keeps Jev's latest score for each rule, from prompts and from edits", async () => {
+  const s = session();
+  await s.prompt("fix the checkout total");
+  const afterPrompt = readState(s.deps.stateDir, "s1").scores;
+  assert.deepEqual(afterPrompt["rule:payments"], { p: 0.9, via: "prompt" });
+  assert.deepEqual(afterPrompt["rule:deploy"], { p: 0.1, via: "prompt" });
+  const byPath = (q, state) => (q.includes("Deploying") && /release/.test(state.file ?? "") ? 0.95 : 0.05);
+  await s.edit("scripts/release.sh", byPath);
+  const afterEdit = readState(s.deps.stateDir, "s1").scores;
+  assert.deepEqual(afterEdit["rule:deploy"], { p: 0.95, via: "edit", file: "scripts/release.sh" });
+  assert.deepEqual(afterEdit["rule:payments"], { p: 0.9, via: "prompt" });
+});
+
+test("map documents get scores too, and a reset after /clear forgets them all", async () => {
+  const s = session({ rules: {} });
+  mkdirSync(join(s.cwd, ".claude", "jev-map"), { recursive: true });
+  writeFileSync(join(s.cwd, ".claude", "jev-map", "checkout.md"), "---\ndescription: How checkout computes totals.\n---\nbody\n");
+  await s.prompt("fix the checkout total", () => 0.8);
+  assert.deepEqual(readState(s.deps.stateDir, "s1").scores["map:checkout"], { p: 0.8, via: "prompt" });
+  await s.start("clear");
+  assert.deepEqual(readState(s.deps.stateDir, "s1").scores, {});
+});
+
+test("a fail-open records no scores, and a malformed score in the file is dropped on read", async () => {
+  const s = session({ env: {} });
+  await s.prompt("x");
+  assert.deepEqual(readState(s.deps.stateDir, "s1").scores, {});
+  const file = join(s.deps.stateDir, "s1.json");
+  const raw = JSON.parse(readFileSync(file, "utf8"));
+  raw.scores = { "rule:a": { p: 2, via: "prompt" }, "rule:b": { p: 0.5, via: "guess" }, "rule:c": { p: 0.5, via: "edit", file: "x.ts" } };
+  writeFileSync(file, JSON.stringify(raw));
+  assert.deepEqual(readState(s.deps.stateDir, "s1").scores, { "rule:c": { p: 0.5, via: "edit", file: "x.ts" } });
+});

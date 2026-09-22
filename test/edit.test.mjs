@@ -267,14 +267,14 @@ test("state is written whole with no temporary file left, and files untouched fo
   utimesSync(join(dir, "recent.json"), daysAgo(6), daysAgo(6));
   writeState(dir, "s1", { injected: ["payments"], files: { "a.ts": { k: 0.5 } } });
   assert.deepEqual(readdirSync(dir).sort(), ["recent.json", "s1.json"]);
-  assert.deepEqual(readState(dir, "s1"), { injected: ["payments"], files: { "a.ts": { k: 0.5 } }, delivered: {} });
+  assert.deepEqual(readState(dir, "s1"), { injected: ["payments"], files: { "a.ts": { k: 0.5 } }, delivered: {}, scores: {} });
 });
 
 test("a session id that is not a plain name gets no state file", () => {
   const dir = stateDir();
   for (const id of ["../escape", "a/b", "", undefined, 42]) {
     writeState(dir, id, { injected: ["x"], files: {} });
-    assert.deepEqual(readState(dir, id), { injected: [], files: {}, delivered: {} }, String(id));
+    assert.deepEqual(readState(dir, id), { injected: [], files: {}, delivered: {}, scores: {} }, String(id));
   }
   assert.deepEqual(readdirSync(dir), []);
   assert.equal(existsSync(join(dir, "..", "escape.json")), false);
