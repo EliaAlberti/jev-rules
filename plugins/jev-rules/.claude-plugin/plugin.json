@@ -10,5 +10,17 @@
   "homepage": "https://github.com/EliaAlberti/jev-rules",
   "repository": "https://github.com/EliaAlberti/jev-rules",
   "license": "MIT",
-  "keywords": ["rules", "context", "hooks", "jev", "typesafe", "conventions"]
+  "keywords": ["rules", "context", "hooks", "jev", "typesafe", "conventions", "pane"],
+  "userConfig": {
+    "pane_opens": {
+      "type": "string",
+      "title": "Rules pane opens",
+      "description": "Early access: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. on-first-pick opens the rules pane by itself the first time Jev picks a rule in a session, when the window is wide enough to show it beside the conversation. only-with-command waits for /rules.",
+      "options": [
+        "on-first-pick",
+        "only-with-command"
+      ],
+      "default": "on-first-pick"
+    }
+  }
 }
