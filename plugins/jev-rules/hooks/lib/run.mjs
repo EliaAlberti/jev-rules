@@ -22,6 +22,9 @@ export const RULES_DIR = join(".claude", "jev-rules");
 // larger with a file preview, which would lose every rule at once. Rules and
 // map documents share this budget, rules first.
 export const OUTPUT_BUDGET = 9000;
+// The cap itself. OUTPUT_BUDGET keeps a margin below it; this is the line that,
+// once crossed, costs every rule at once.
+export const OUTPUT_HARD_LIMIT = 10_000;
 const OVER_LIMIT = "over Claude Code's 10,000-character hook output limit";
 
 const entry = (rule, p, injected, why) => ({ rule, p, injected, why });
@@ -118,8 +121,21 @@ export function render(decision, total, { subject = "this request", failOpenNote
   };
   let chosen = [...fixed, ...judged];
   let text = build(chosen);
+  // Judged rules go first: their probabilities rank them, so the least relevant leaves first.
   while (text.length > OUTPUT_BUDGET && judged.length) {
     judged.pop();
+    omitted += 1;
+    chosen = [...fixed, ...judged];
+    text = build(chosen);
+  }
+  // Fixed rules carry no probability to rank by, and one oversized `always` rule is
+  // deliberately still shown -- OUTPUT_BUDGET leaves a margin for exactly that. But a
+  // fail-open puts EVERY rule here and judged is then empty, so the loop above never
+  // runs, precisely when the output is largest. Past the real cap Claude Code replaces
+  // the whole block with a file preview and every rule is lost at once, so fixed rules
+  // are trimmed against the cap rather than the budget.
+  while (text.length > OUTPUT_HARD_LIMIT && fixed.length) {
+    fixed.pop();
     omitted += 1;
     chosen = [...fixed, ...judged];
     text = build(chosen);
