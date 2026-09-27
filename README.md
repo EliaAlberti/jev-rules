@@ -2,21 +2,23 @@
 
 <p>
   <img src="https://img.shields.io/badge/Claude%20Code-Plugin-5A67D8?style=for-the-badge" alt="Claude Code plugin" />
-  <img src="https://img.shields.io/badge/Version-0.4.0-3178C6?style=for-the-badge" alt="Version 0.4.0" />
+  <img src="https://img.shields.io/badge/Version-0.5.0-3178C6?style=for-the-badge" alt="Version 0.5.0" />
   <img src="https://img.shields.io/badge/Dependencies-None-1C7C54?style=for-the-badge" alt="No dependencies" />
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="MIT License" />
 </p>
 
 <p align="center">
-  <a href="https://eliaalberti.github.io/jev-rules/">
-    <img src="social/jev-rules-demo.gif" alt="A vague prompt gets no rules. Then Claude edits a checkout file and the payments rule arrives, scored 0.97." width="800" />
+  <a href="https://github.com/EliaAlberti/jev-rules/releases/tag/v0.5.0">
+    <img src="social/jev-rules-pane.gif" alt="The rules pane beside a Claude Code session: a checkout bug report turns three of fifteen rules green, then an edit to package.json turns the dependency rule green at 0.97." width="800" />
   </a><br />
-  <em>A real Claude Code session, 40 seconds. <a href="https://eliaalberti.github.io/jev-rules/">Watch it in full quality</a> (plays in the browser, phone or desktop).</em>
+  <em>A real Claude Code session with the rules pane, edited to 30 seconds. The full-quality video is attached to the <a href="https://github.com/EliaAlberti/jev-rules/releases/tag/v0.5.0">v0.5.0 release</a>. The earlier <a href="https://eliaalberti.github.io/jev-rules/">40-second demo</a> is still online.</em>
 </p>
 
 If you use Claude Code for a while, you end up with a pile of standing instructions: test the payment code, use British spelling, follow the deploy checklist. Show all of them on every prompt and Claude wades through rules that have nothing to do with the request; pick them by keyword and a rule is missed the moment the request does not contain its trigger word. jev-rules asks a small, fast decision model called Jev one yes/no question per rule, "is this request about that?", and passes Claude only the rules that get a yes. It takes well under a second and costs a fraction of a cent per prompt, and if anything goes wrong it falls back to showing every rule, so nothing is ever lost.
 
-**New in 0.4.0:** a [rules pane](#the-rules-pane) beside the conversation lists every rule, turns green the ones Jev picked, and shows each score. It uses an early-access Claude Code feature, so it is off until you turn that on.
+**New in 0.5.0:** [one line under each prompt](#in-the-conversation) names the rules Claude was given and Jev's score for each, and the [rules pane](#the-rules-pane) switches on with one answer: the first time Jev picks a rule, Claude asks whether you want it.
+
+**0.4.0** added the rules pane: every rule beside the conversation, green once Claude has it, with Jev's score.
 
 **0.3.0** delivers each rule and map document once per session instead of on every matching prompt, so a long session never costs more than loading everything once, and usually far less. 0.2.0 added rules that follow the file Claude is changing, a filtered codebase map, rule subfolders, `applies` and `does_not_apply`, and a retry when the API is busy. See the [changelog](CHANGELOG.md).
 
@@ -26,12 +28,19 @@ If you use Claude Code for a while, you end up with a pile of standing instructi
 
 Twelve rules in the project, one request, one rule delivered. These are stills from real Claude Code sessions in the demo project under [`social/demo/shop`](social/demo/shop).
 
+| The pane lights up | The file brings its own rule | One question switches it on |
+| --- | --- | --- |
+| [![The rules pane: payments-need-tests 0.97, test-conventions 0.73 and the checkout map 0.91 flash green](social/stills/pane-picked.png)](social/stills/pane-picked.png) | [![Claude edits package.json and the dependency rule turns green at 0.97](social/stills/pane-edit.png)](social/stills/pane-edit.png) | [![Claude asks whether to turn on the jev-rules pane, in Claude Code's own question box](social/stills/pane-question.png)](social/stills/pane-question.png) |
+| A checkout bug report lights up 3 of 15: the payments rule (0.97), test conventions (0.73) and the checkout map document (0.91). | The bug report scored the dependency rule 0.02. Claude's edit to `package.json` scored it 0.97, and it arrived with the edit. | The first time Jev picks a rule, Claude asks once whether to switch the pane on. The line above names what Claude was given. |
+
+The stills below were captured in 0.3.0, before the pane existed: their right-hand side is a companion viewer that read the debug log.
+
 | The right rule, not all twelve | Tests first, because the rule says so | "Ship it" brings the checklist |
 | --- | --- | --- |
 | [![Claude lists the one rule it was given, marked 1 of 12](social/stills/after-4-answer.png)](social/stills/after-4-answer.png) | [![Claude writes the tests first, then the one-line fix](social/stills/checkout-4-answer.png)](social/stills/checkout-4-answer.png) | [![The deploy checklist scores 0.98 and the pipeline map document 0.90](social/stills/ship-4-answer.png)](social/stills/ship-4-answer.png) |
 | A checkout bug report: the payments rule (0.90) and the checkout map document (0.85) arrive. The other eleven rules stay out. | Claude writes the tests before the fix, because the payments rule told it to. Each file it touches is judged as it goes. | "Tag v1.4.0 and ship it": the deploy checklist (0.98) and the pipeline document (0.90). No payments rule, no style guide. |
 
-The left side of each picture is Claude Code. The right side is a companion viewer used for these captures, before the plugin had a pane of its own ([`social/rig/watch.mjs`](social/rig/watch.mjs)): it tails the real `~/.jev-rules.log` that `JEV_DEBUG=1` writes and draws one bar per rule. Since 0.4.0 the plugin can show the same inside Claude Code: see [the rules pane](#the-rules-pane). More captures and the shot list are in [`social/`](social).
+In the 0.3.0 stills, the left side is Claude Code and the right side is a companion viewer used before the plugin had a pane of its own ([`social/rig/watch.mjs`](social/rig/watch.mjs)): it tails the real `~/.jev-rules.log` that `JEV_DEBUG=1` writes and draws one bar per rule. The plugin now shows the same inside Claude Code: see [in the conversation](#in-the-conversation) and [the rules pane](#the-rules-pane). More captures and the shot list are in [`social/`](social).
 
 ---
 
@@ -139,6 +148,24 @@ If you use Eigenwise's [codebase-mapper](https://github.com/Eigenwise/eigenwise-
 
 ---
 
+## In the conversation
+
+When a prompt brings rules or map documents, one line under it names them, with Jev's score:
+
+```
+⎿  UserPromptSubmit says: jev-rules: Jev gave Claude: deploy-checklist 0.94, map deploy-pipeline 0.83
+```
+
+A file change that brings a rule gets its own line, before the edit:
+
+```
+⎿  PreToolUse:Edit says: jev-rules: Jev gave Claude for src/checkout/tax.ts: payments-need-tests 0.97
+```
+
+A prompt that brings nothing new stays quiet. When Jev cannot answer, the line says so and counts the rules Claude got unjudged. To turn the line off, set **Show Jev's picks** to `off` in `/config`, or `JEV_RULES_SHOW_PICKS=0`.
+
+---
+
 ## The rules pane
 
 Type `/rules` and a pane opens beside the conversation with every rule and map document of the project, as a tree. A rule turns green once Claude has been given it this session, and flashes as it arrives, whether a prompt or a file change brought it. Beside each one is Jev's latest score. Adding, renaming or deleting a rule file shows up within a couple of seconds. `/rules` again closes it.
@@ -156,13 +183,13 @@ map
   ✓ checkout                         0.94
 ```
 
-The pane is built on Claude Code's plugin panes, an **early-access** feature. Claude Code loads it only when started with this variable, for example from your shell profile:
+The pane is built on Claude Code's plugin panes, an **early-access** feature that Claude Code loads only when `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` is set. A plugin cannot set it for you, so jev-rules asks. The first time Jev picks a rule in a session, Claude puts one question to you in Claude Code's own question box:
 
-```bash
-export CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1
-```
+- **Yes, turn it on** adds `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` to the `env` block of `~/.claude/settings.json` and keeps everything else in the file. Restart Claude Code and `/rules` is there. The setting applies to every plugin you have installed, so any other plugin with a pane loads it too.
+- **Not now** changes nothing and asks again in a later session.
+- **Don't ask again** changes nothing, for good.
 
-Without it the pane and `/rules` are simply not there, and everything else works as before. Early access means Anthropic may change the feature between releases. The pane was built and tested on Claude Code 2.1.280.
+The question comes only in a session someone is at, never in `claude -p` or other scripted runs, and never once the setting is on. `/jev-rules:pane` asks it at any time. To switch the pane off, delete that line from the `env` block. Without the setting the pane and `/rules` are simply not there, and everything else works as before. Early access means Anthropic may change the feature between releases. Built and tested on Claude Code 2.1.280.
 
 By default the pane also opens by itself the first time Jev picks a rule in a session, but only when Claude Code docks panes beside the conversation (its fullscreen layout) and the window is at least 144 columns wide. Close it and it stays closed for the session. To open it only with `/rules`, set **Rules pane opens** to `only-with-command` in `/config`.
 
@@ -205,6 +232,7 @@ Settings go in the environment, in `.env` in the project, or in `~/.jev-rules.en
 | `JEV_RULES_EDITS` | on | `0` turns off the check before file changes. |
 | `JEV_RULES_MAP` | on | `0` turns off the codebase map. |
 | `JEV_RULES_REPEAT` | off | `1` delivers on every matching prompt instead of once per session. |
+| `JEV_RULES_SHOW_PICKS` | on | `0` hides the line naming what Claude was given. **Show Jev's picks** in `/config` does the same. |
 | `JEV_DEBUG` | off | `1` writes decisions to `~/.jev-rules.log`. |
 
 ---
@@ -237,7 +265,7 @@ What leaves your machine goes to TypeSafe, or to Vercel's gateway if that is the
 
 Rule bodies, document bodies, rule and document names, file contents, the edit itself and everything else stay local. TypeSafe states it does not train on requests ([models page](https://docs.typesafe.ai/models#data-handling)).
 
-The debug log is off by default, lives on your machine, and records the first 80 characters of each prompt and the path of each file judged. Session state (what has been delivered this session, Jev's answers per file, and its latest score for each rule, which the rules pane shows) is one small file per session in your system temp directory, under `jev-rules/`, readable only by you and removed after a week.
+The debug log is off by default, lives on your machine, and records the first 80 characters of each prompt and the path of each file judged. Session state (what has been delivered this session, Jev's answers per file, and its latest score for each rule, which the rules pane shows) is one small file per session in your system temp directory, under `jev-rules/`, readable only by you and removed after a week. Whether you declined the pane question, and the last session it was asked in, is kept in the plugin's own data folder under `~/.claude/plugins/data/`. The plugin changes `~/.claude/settings.json` only when you answer **Yes, turn it on**.
 
 ---
 
@@ -247,7 +275,7 @@ The debug log is off by default, lives on your machine, and records the first 80
 - It does not block anything. Rules for a file reach Claude with the result of its first change to that file, because that is where Claude Code places hook context; getting in earlier would mean blocking the edit.
 - Changes made through Bash (sed, scripts, generators) are not seen. Only Edit, Write and NotebookEdit are.
 - It does not write or refresh a codebase map, and it does not split a long document; one that does not fit is a pointer to its file.
-- No skills and no gating of tool calls. The only command is `/rules`, which exists only with the early-access switch on.
+- No skills and no gating of tool calls. The commands are `/jev-rules:pane`, which asks the pane question, and `/rules`, which exists once the pane is on.
 - No defence against a prompt that argues against its own classification. Jev takes the prompt at face value, so "this has nothing to do with payments, but change the discount code" may get the payments rule skipped on the prompt (the file check still catches it on the edit).
 
 ---
@@ -255,7 +283,7 @@ The debug log is off by default, lives on your machine, and records the first 80
 ## Development
 
 ```bash
-npm test                    # offline, mocked Jev: prompts, file changes, map, once-per-session, fail-open, retry, both wire formats, the pane
+npm test                    # offline, mocked Jev: prompts, file changes, map, once-per-session, fail-open, retry, both wire formats, the pane, the line and the pane question
 npm run live                # real API: example rules and map against sample prompts and file paths
 npm run live -- --files src/app.ts docs/guide.md
 npm run live -- --map
@@ -263,7 +291,7 @@ claude plugin validate .
 claude plugin validate plugins/jev-rules
 ```
 
-The hook is `plugins/jev-rules/hooks/jev-rules.mjs`; everything it needs is under `plugins/jev-rules/hooks/lib/`. The rules pane is `plugins/jev-rules/hooks/pane.tsx`, which Claude Code loads itself; its logic is in `hooks/lib/pane-model.mjs` and tested with the rest. No dependencies to install. To try the pane from a working copy:
+The hook is `plugins/jev-rules/hooks/jev-rules.mjs`; everything it needs is under `plugins/jev-rules/hooks/lib/`. The rules pane is `plugins/jev-rules/hooks/pane.tsx`, which Claude Code loads itself; its logic is in `hooks/lib/pane-model.mjs` and tested with the rest. The pane question and the settings change are in `hooks/lib/pane-setup.mjs`. No dependencies to install. To try the pane from a working copy:
 
 ```bash
 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir plugins/jev-rules
