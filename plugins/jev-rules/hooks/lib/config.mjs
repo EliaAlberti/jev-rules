@@ -40,7 +40,7 @@ function number(value, fallback, { min, max }) {
 const OFF = /^(0|false|no)$/i;
 
 /**
- * @returns {{backend: "typesafe"|"vercel"|null, key: string|null, threshold: number, timeoutMs: number, debug: boolean, edits: boolean, map: boolean, repeat: boolean}}
+ * @returns {{backend: "typesafe"|"vercel"|null, key: string|null, threshold: number, timeoutMs: number, debug: boolean, edits: boolean, map: boolean, repeat: boolean, showPicks: boolean}}
  */
 export function readConfig(env) {
   const direct = env.JEV_API_KEY || env.TYPESAFE_API_KEY || "";
@@ -64,5 +64,8 @@ export function readConfig(env) {
     map: !OFF.test(env.JEV_RULES_MAP ?? ""),
     // Off by default: each rule and document is delivered once per session.
     repeat: Boolean(env.JEV_RULES_REPEAT) && !OFF.test(env.JEV_RULES_REPEAT),
+    // The line under each prompt naming what Jev picked. The show_picks option
+    // in /config reaches hooks as CLAUDE_PLUGIN_OPTION_SHOW_PICKS.
+    showPicks: ![env.CLAUDE_PLUGIN_OPTION_SHOW_PICKS, env.JEV_RULES_SHOW_PICKS].some((v) => /^(0|false|no|off)$/i.test(v ?? "")),
   };
 }

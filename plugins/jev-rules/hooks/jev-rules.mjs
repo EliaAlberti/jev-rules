@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// Entry point for both hooks. Reads the hook JSON from stdin, hands it to the
-// prompt hook (UserPromptSubmit) or the edit hook (PreToolUse), and prints the
-// additionalContext envelope. Exit code is always 0, stderr stays silent and
-// no permission decision is ever returned: a broken hook must never block or
-// clutter a prompt or an edit.
+// Entry point for every hook. Reads the hook JSON from stdin, hands it to the
+// prompt hook (UserPromptSubmit), the edit hook (PreToolUse) or the answer to
+// the pane question (PostToolUse), and prints the additionalContext envelope,
+// with the line for the person as systemMessage. Exit code is always 0, stderr
+// stays silent and no permission decision is ever returned: a broken hook must
+// never block or clutter a prompt or an edit.
 
 import { readFileSync } from "node:fs";
 import { runEdit } from "./lib/edit.mjs";
+import { runAnswer } from "./lib/pane-setup.mjs";
 import { run, runSessionStart } from "./lib/run.mjs";
 
 process.exitCode = 0;
@@ -18,6 +20,7 @@ const HOOKS = new Map([
   ["UserPromptSubmit", run],
   ["PreToolUse", runEdit],
   ["SessionStart", runSessionStart],
+  ["PostToolUse", runAnswer],
 ]);
 
 let input = {};
@@ -33,10 +36,13 @@ try {
   // a prompt, the only event this script handled before edits.
   const event = input?.hook_event_name ?? "UserPromptSubmit";
   const hook = HOOKS.get(event);
-  const context = hook ? await hook(input) : null;
-  if (context) {
-    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: context } }));
-  }
+  let message = null;
+  const context = hook ? await hook(input, { say: (text) => (message = text) }) : null;
+  const output = {
+    ...(message ? { systemMessage: message } : {}),
+    ...(context ? { hookSpecificOutput: { hookEventName: event, additionalContext: context } } : {}),
+  };
+  if (message || context) process.stdout.write(JSON.stringify(output));
 } catch {
   // Fail open: nothing to add, the prompt or edit proceeds.
 }

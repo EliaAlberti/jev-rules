@@ -16,7 +16,7 @@ import { readConfig, resolveEnv } from "./config.mjs";
 import { criteriaFor, fileInstructionFor } from "./jev.mjs";
 import { appendDebug } from "./log.mjs";
 import { loadRules } from "./rules.mjs";
-import { failOpenDecision, formatLog, judge, projectDirOf, render, RULES_DIR } from "./run.mjs";
+import { failOpenDecision, formatLog, judge, picksMessage, projectDirOf, render, RULES_DIR } from "./run.mjs";
 import { isDelivered, readState, STATE_DIR, withDelivered, withScores, writeState } from "./state.mjs";
 
 // Where each file-changing tool puts the path it is about to change. Current
@@ -78,7 +78,8 @@ export async function decideEdit({ candidates, file, cache, config, fetch: fetch
  * there is nothing new to inject.
  *
  * @param {object} input Parsed PreToolUse stdin (tool_name, tool_input, cwd, session_id).
- * @param {object} [deps] Test seams: env, home, fetch, cwd, stateDir.
+ * @param {object} [deps] Test seams: env, home, fetch, cwd, stateDir; and
+ *   say, which receives the line shown to the person.
  */
 export async function runEdit(input, deps = {}) {
   const field = PATH_FIELD.get(input?.tool_name);
@@ -121,5 +122,7 @@ export async function runEdit(input, deps = {}) {
     const fromCache = decision.all.filter((e) => e.why === "cached").length;
     appendDebug(home, formatLog(decision, input.session_id, "edit", `cached=${fromCache} file=${JSON.stringify(file)}`));
   }
+  const message = config.showPicks ? picksMessage(decision, shown, new Map(), file) : null;
+  if (message) deps.say?.(message);
   return shown.length ? text : null;
 }

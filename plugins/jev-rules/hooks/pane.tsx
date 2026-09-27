@@ -3,8 +3,9 @@
 // arrives, with Jev's latest score beside each one.
 //
 // Early access: Claude Code loads this module only with
-// CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. Without it the plugin's command hooks
-// work exactly as before and this file is skipped.
+// CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1, which the pane question (lib/pane-setup.mjs,
+// /jev-rules:pane) adds to the person's settings when they say yes. Without it
+// the plugin's command hooks work exactly as before and this file is skipped.
 //
 // The pane decides nothing. It reads the session record the command hooks
 // write, <tmpdir>/jev-rules/<session id>.json, and makes no Jev call.

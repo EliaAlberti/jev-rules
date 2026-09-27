@@ -14,6 +14,7 @@ import { readConfig, resolveEnv } from "./config.mjs";
 import { askJev, instructionFor, mapInstructionFor, MAX_PROMPT_CHARS } from "./jev.mjs";
 import { appendDebug } from "./log.mjs";
 import { loadMap } from "./map.mjs";
+import { markOffered, offerInstruction, shouldOffer } from "./pane-setup.mjs";
 import { loadRules } from "./rules.mjs";
 import { isDelivered, readState, resetDelivered, STATE_DIR, withDelivered, withScores, writeState } from "./state.mjs";
 
@@ -25,6 +26,10 @@ export const OUTPUT_BUDGET = 9000;
 const OVER_LIMIT = "over Claude Code's 10,000-character hook output limit";
 
 const entry = (rule, p, injected, why) => ({ rule, p, injected, why });
+
+// The plugin's own commands, such as /jev-rules:pane, are about the plugin, not
+// the project: Jev is not asked about them.
+const OWN_COMMAND = /^\s*\/jev-rules:\S*\s*$/;
 
 /** The project root: Claude Code's CLAUDE_PROJECT_DIR, else the directory the hook runs in. */
 export function projectDirOf(input, env, cwd) {
@@ -192,16 +197,46 @@ export function formatLog(decision, sessionId, event, tail, placed = new Map()) 
   return lines;
 }
 
+const MESSAGE_ITEMS = 6;
+
+/**
+ * The line the person sees under a prompt, or before an edit, naming what
+ * Claude was given: "Jev gave Claude: payments 0.97, tests 0.91, map checkout
+ * 0.88". `shown` are the rules given, `placed` the map documents, as
+ * renderMap returns them, and `file` the file of an edit. Null when nothing
+ * was given.
+ */
+export function picksMessage(decision, shown, placed = new Map(), file) {
+  const docs = [...placed.keys()];
+  if (!shown.length && !docs.length) return null;
+  const where = file ? ` for ${file}` : "";
+  if (decision.outcome.startsWith("fail-open")) {
+    const count = `${shown.length} rule${shown.length === 1 ? "" : "s"}`;
+    return `jev-rules: Jev was unavailable (${decision.outcome.slice("fail-open:".length)}), so Claude got ${count}${where} unjudged`;
+  }
+  const entries = new Map([...decision.all, ...(decision.map ?? [])].map((e) => [e.rule, e]));
+  const label = (item, prefix) => {
+    const e = entries.get(item);
+    if (e?.p !== undefined) return `${prefix}${item.name} ${e.p.toFixed(2)}`;
+    return `${prefix}${item.name} (${e?.why === "always" ? "always" : "no description"})`;
+  };
+  const items = [...shown.map((rule) => label(rule, "")), ...docs.map((doc) => label(doc, "map "))];
+  const more = items.length - MESSAGE_ITEMS;
+  const listed = more > 0 ? [...items.slice(0, MESSAGE_ITEMS), `${more} more`] : items;
+  return `jev-rules: Jev gave Claude${where}: ${listed.join(", ")}`;
+}
+
 /**
  * Prompt hook entry point. Returns the additionalContext text, or null when
  * there is nothing to inject.
  *
  * @param {object} input Parsed UserPromptSubmit stdin (prompt, cwd, session_id).
- * @param {object} [deps] Test seams: env, home, fetch, cwd, stateDir.
+ * @param {object} [deps] Test seams: env, home, fetch, cwd, stateDir; and
+ *   say, which receives the line shown to the person.
  */
 export async function run(input, deps = {}) {
   const prompt = typeof input?.prompt === "string" ? input.prompt : "";
-  if (!prompt.trim()) return null;
+  if (!prompt.trim() || OWN_COMMAND.test(prompt)) return null;
   const baseEnv = deps.env ?? process.env;
   const home = deps.home ?? homedir();
   const projectDir = projectDirOf(input, baseEnv, deps.cwd);
@@ -262,6 +297,15 @@ export async function run(input, deps = {}) {
   }
   if (config.debug) {
     appendDebug(home, [...formatLog(decision, input.session_id, "prompt", `prompt=${JSON.stringify(short)}`, placed), ...seenLines]);
+  }
+  const message = config.showPicks ? picksMessage(decision, shown, placed) : null;
+  if (message) deps.say?.(message);
+  // The first pick of a session is when the pane has something to show, so
+  // that is when the person is asked whether they want it.
+  const dataDir = deps.dataDir ?? baseEnv.CLAUDE_PLUGIN_DATA;
+  if (sections.length && shouldOffer({ env: baseEnv, sessionId: input.session_id, dataDir })) {
+    markOffered(dataDir, input.session_id);
+    sections.push(offerInstruction());
   }
   return sections.join("\n\n") || null;
 }
