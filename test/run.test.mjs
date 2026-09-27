@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { readConfig, resolveEnv } from "../plugins/jev-rules/hooks/lib/config.mjs";
 import { askJev, BACKENDS, instructionFor, MAX_PROMPT_CHARS } from "../plugins/jev-rules/hooks/lib/jev.mjs";
-import { OUTPUT_BUDGET, run } from "../plugins/jev-rules/hooks/lib/run.mjs";
+import { OUTPUT_BUDGET, OUTPUT_HARD_LIMIT, run } from "../plugins/jev-rules/hooks/lib/run.mjs";
 import { fakeJev, home, names, project, THREE, TYPESAFE_ENV, VERCEL_ENV } from "./helpers.mjs";
 
 // --- helpers ---------------------------------------------------------------
@@ -146,6 +146,46 @@ test("keeps the output under Claude Code's limit by dropping the lowest-probabil
   assert.ok(context.length <= OUTPUT_BUDGET);
   assert.deepEqual(names(context), ["house", "a", "c"]);
   assert.match(context, /1 rule omitted/);
+});
+
+test("keeps a fail-open under the limit: every rule is fixed, so judged is empty", async () => {
+  // A fail-open injects every rule with no probability, which is exactly when the output
+  // is largest. Trimming must still happen or Claude Code turns the block into a file
+  // preview and all rules are lost.
+  const big = "x".repeat(4000);
+  const cwd = project({
+    a: { description: "A", body: big },
+    b: { description: "B", body: big },
+    c: { description: "C", body: big },
+  });
+  const context = await run({ prompt: "x", cwd }, { env: {}, home: home(), fetch: fakeJev(() => 1) });
+  assert.match(context, /Jev was unavailable: no-key\./);
+  assert.ok(context.length <= OUTPUT_HARD_LIMIT, `${context.length} > ${OUTPUT_HARD_LIMIT}`);
+  assert.match(context, /rules? omitted/);
+});
+
+test("keeps always-rules under the limit even with nothing to rank", async () => {
+  const big = "x".repeat(4000);
+  const cwd = project({
+    one: { always: true, body: big },
+    two: { always: true, body: big },
+    three: { always: true, body: big },
+  });
+  const context = await run({ prompt: "x", cwd }, { env: TYPESAFE_ENV, home: home(), fetch: fakeJev(() => 1) });
+  assert.ok(context.length <= OUTPUT_HARD_LIMIT, `${context.length} > ${OUTPUT_HARD_LIMIT}`);
+  assert.match(context, /rules? omitted/);
+});
+
+test("a rule larger than the cap yields a note, not an oversized block", async () => {
+  const cwd = project({ huge: { always: true, body: "x".repeat(OUTPUT_HARD_LIMIT + 1000) } });
+  const context = await run({ prompt: "x", cwd }, { env: TYPESAFE_ENV, home: home(), fetch: fakeJev(() => 1) });
+  assert.ok(context === null || context.length <= OUTPUT_HARD_LIMIT, `${context?.length} > ${OUTPUT_HARD_LIMIT}`);
+});
+
+test("an oversized always-rule on its own is still shown: the budget leaves margin for it", async () => {
+  const cwd = project({ house: { always: true, body: "h".repeat(9500) } });
+  const context = await run({ prompt: "x", cwd }, { env: TYPESAFE_ENV, home: home(), fetch: fakeJev(() => 1) });
+  assert.deepEqual(names(context), ["house"]);
 });
 
 // --- wire formats ----------------------------------------------------------
