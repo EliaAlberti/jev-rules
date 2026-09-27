@@ -2,6 +2,28 @@
 
 All notable changes to jev-rules. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-09-27
+
+### Added
+
+- **One line under each prompt** naming the rules and map documents Claude was given, with Jev's score for each: `jev-rules: Jev gave Claude: deploy-checklist 0.94, map deploy-pipeline 0.83`. A file change that brings a rule gets its own line, naming the file. When Jev cannot answer, the line says so. It needs no early-access setting. **Show Jev's picks** in `/config`, or `JEV_RULES_SHOW_PICKS=0`, turns it off.
+- **The pane switches on with one answer.** The first time Jev picks a rule in a session, Claude asks in Claude Code's own question box whether to turn the rules pane on. Yes adds `"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"` to the `env` block of `~/.claude/settings.json` and keeps the rest of the file; the pane appears after a restart. Not now asks again in a later session; Don't ask again is remembered. The question comes only in attended sessions, never in scripted runs, and never once the setting is on.
+- `/jev-rules:pane` asks the same question at any time.
+- 18 new offline tests (131 in total).
+
+### Changed
+
+- The plugin's own commands, such as `/jev-rules:pane`, are not sent to Jev as prompts.
+
+### Upgrade
+
+```bash
+claude plugin marketplace update jev-rules
+claude plugin update jev-rules@jev-rules
+```
+
+Restart Claude Code afterwards. The pane question comes with the first rule Jev picks. If you already start Claude Code with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, nothing is asked and the pane works as before.
+
 ## [0.4.0] - 2026-09-22
 
 ### Added
@@ -90,6 +112,7 @@ Initial release.
 - Two routes to the same model: TypeSafe's API (`JEV_API_KEY`, `TYPESAFE_API_KEY`) and Vercel AI Gateway (`AI_GATEWAY_API_KEY`). Node 20.12+, no dependencies.
 - `JEV_DEBUG=1` decision log at `~/.jev-rules.log`, three example rules, offline tests and a live script.
 
+[0.5.0]: https://github.com/EliaAlberti/jev-rules/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/EliaAlberti/jev-rules/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/EliaAlberti/jev-rules/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/EliaAlberti/jev-rules/compare/v0.1.0...v0.2.0

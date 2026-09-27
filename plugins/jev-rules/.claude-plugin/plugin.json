@@ -1,7 +1,7 @@
 {
   "name": "jev-rules",
   "displayName": "jev-rules",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Jev picks which of your rules apply to each prompt, so Claude only sees the ones that matter.",
   "author": {
     "name": "Elia Alberti",
@@ -12,10 +12,20 @@
   "license": "MIT",
   "keywords": ["rules", "context", "hooks", "jev", "typesafe", "conventions", "pane"],
   "userConfig": {
+    "show_picks": {
+      "type": "string",
+      "title": "Show Jev's picks",
+      "description": "on shows one line under each prompt, and before an edit that brings a rule, naming what Claude was given and Jev's score for each. off keeps the conversation as it was.",
+      "options": [
+        "on",
+        "off"
+      ],
+      "default": "on"
+    },
     "pane_opens": {
       "type": "string",
       "title": "Rules pane opens",
-      "description": "Early access: applies only when Claude Code runs with CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1. on-first-pick opens the rules pane by itself the first time Jev picks a rule in a session, when the window is wide enough to show it beside the conversation. only-with-command waits for /rules.",
+      "description": "Applies once the rules pane is switched on (/jev-rules:pane, or CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 in the env block of ~/.claude/settings.json). on-first-pick opens the rules pane by itself the first time Jev picks a rule in a session, when the window is wide enough to show it beside the conversation. only-with-command waits for /rules.",
       "options": [
         "on-first-pick",
         "only-with-command"
