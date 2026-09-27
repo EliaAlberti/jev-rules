@@ -295,7 +295,9 @@ The hook is `plugins/jev-rules/hooks/jev-rules.mjs`; everything it needs is unde
 
 ```bash
 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir plugins/jev-rules
-``` Release notes live in [CHANGELOG.md](CHANGELOG.md).
+```
+
+Release notes live in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
